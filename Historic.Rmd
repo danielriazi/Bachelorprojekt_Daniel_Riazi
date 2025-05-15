@@ -1,0 +1,816 @@
+---
+title: "Historic"
+output: html_document
+date: "2025-04-21"
+---
+
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+library(rugarch)
+library(fGarch)
+library(ggplot2)
+library(esback)
+library(quantmod)
+```
+
+```{r}
+Exceedance <- function(Xt, VaR){
+  return(-sum((Xt + VaR < 0)))
+}
+  
+Z2 <- function(Xt, VaR, ES, alpha) {
+  T <- length(Xt)
+  return(sum((Xt*(Xt < -VaR))/(T*alpha*ES))+1)
+}
+
+Z4 <- function(Xt, VaR, ES, alpha) {
+  T <- length(Xt)
+  return(sum((alpha*(-VaR)+(Xt+VaR)*(Xt + VaR < 0))/(T*alpha*ES))+1)
+}
+
+```
+
+
+```{r}
+getSymbols("^GSPC", from = "2023-01-01", to = "2025-01-01")
+
+sp500_prices <- na.omit(diff(log(Cl(GSPC))))
+spec <- ugarchspec(
+  variance.model = list(model = "sGARCH", garchOrder = c(1,1)),
+  mean.model = list(armaOrder = c(0,0), include.mean = FALSE),
+  distribution.model = "std"
+)
+
+fit_real <- ugarchfit(spec = spec, data = sp500_prices)
+
+coef_real <- coef(fit_real)
+
+omega <- coef_real[1]
+alpha1 <- coef_real[2]
+beta1 <- coef_real[3]
+df <- coef_real[4]
+alpha <- 0.025
+
+garch_path <- function(n.sim, n.start, omega, alpha1, beta1, df) {
+  N <- n.sim + n.start
+  Xt <- numeric(N)
+  sigma2t <- numeric(N)
+  Zt <- rstd(N, 0, 1, nu = df)
+  
+  # Initialværdi
+  sigma2t[1] <- omega/(1-alpha1-beta1)
+  Xt[1] <- sqrt(sigma2t[1])*Zt[1]
+  
+  for (t in 2:N) {
+    sigma2t[t] <- omega + alpha1*(Xt[t-1])^2 + beta1*sigma2t[t-1]
+    Xt[t] <- sqrt(sigma2t[t])*Zt[t]
+  }
+  return(list(X = Xt, Xt = Xt[(n.start+1):N], sigma2 = sigma2t[(n.start+1):N]))
+}
+
+df  <- 100        # 100
+alpha <- 0.025
+alpha1 <- 0.15   # 0.15
+beta1 <- 0.8   # 0.8 
+omega <- 0.01
+
+N <- 10^4
+n <- 500 
+T <- 250
+burnin <- 750
+
+  X <- matrix(0,N,n); var <- matrix(0,N,n); var1 <- matrix(0,N,n); es <- matrix(0,N,n)
+  set.seed(4652374)
+  for (i in 1:N) {
+    path_sim <- garch_path(n, burnin, omega, alpha1, beta1, df)
+    X[i,] <- as.numeric(path_sim$Xt)
+    sigma <- as.numeric(sqrt(path_sim$sigma2))
+    var[i,] <- -sigma*qstd(alpha, 0, 1, df)
+    var1[i,] <- -sigma*qstd(0.01, 0, 1, df)
+    es[i,] <- -sigma*(integrate(function(q) qstd(q, 0, 1, df), 0, alpha)$value/alpha)
+  }
+
+VaR_HS <- matrix(0, nrow = N, ncol = n)
+VaR1_HS <- matrix(0, nrow = N, ncol = n)
+ES_HS  <- matrix(0, nrow = N, ncol = n)
+
+weights <- rep(1/T, T)
+
+for (i in 1:N){
+  for (m in (T+1):n){
+    window <- X[i,(m-T):(m-1)]
+    
+    sort_id <- order(window)  
+    sorted_returns <- window[sort_id]
+    sorted_weights <- weights[sort_id]
+    
+    cum_weights <- cumsum(sorted_weights)
+    
+    VaR_index_alpha <- which(cum_weights >= 0.025)[1]
+    VaR_index_beta <- which(cum_weights >= 0.01)[1]
+    
+    VaR_HS[i, m] <- -sorted_returns[VaR_index_alpha]
+    VaR1_HS[i, m] <- -sorted_returns[VaR_index_beta]
+    
+    cumulative_before <- sum(sorted_weights[1:(VaR_index_alpha-1)])
+    adjusted_weight <- 0.025 - cumulative_before
+    sorted_weights[VaR_index_alpha] <- 0.025 - cumulative_before
+    
+    ES_HS[i, m] <- -sum(sorted_returns[1:VaR_index_alpha]*sorted_weights[1:VaR_index_alpha])/0.025
+  }
+}
+
+VaR_HS_tail <- VaR_HS[,(T+1):n]
+VaR1_HS_tail <- VaR1_HS[,(T+1):n]
+ES_HS_tail <- ES_HS[,(T+1):n]
+X_tail <- X[,(T+1):n]
+var_tail <- var[,(T+1):n]
+var1_tail <- var1[,(T+1):n]
+es_tail <- es[,(T+1):n]
+  
+sim <- function(alpha, X, VaR, VaR1, ES) {
+  Z2_path <- matrix(0,N,1); Z4_path <- matrix(0,N,1); Exceedance_path <- matrix(0,N,1)
+  
+  for (i in 1:N) {
+    Z2_path[i] <- Z2(X[i,], VaR[i,], ES[i,], alpha)
+    Z4_path[i] <- Z4(X[i,], VaR[i,], ES[i,], alpha)
+    Exceedance_path[i] <- Exceedance(X[i,], VaR1[i,])
+  }
+  return(list(Z2 = Z2_path, Z4 = Z4_path, Exceedance=Exceedance_path))
+}
+
+sim0 <- sim(0.025, X_tail, var_tail, var1_tail, es_tail)
+sim1 <- sim(0.025, X_tail, VaR_HS_tail, VaR1_HS_tail, ES_HS_tail)
+
+f <- function(p) {
+  quantile(sim0$Exceedance, probs = p, type = 1)
+}
+
+p_value <- seq(0.03, 0.06, length.out = 10000)
+f_values <- sapply(p_value, f)
+valid_p <- p_value[f_values == -6]
+p <- round(max(valid_p), 4)
+p
+
+length(sim1$Z2[sim1$Z2<sort(sim0$Z2)[floor(N*0.0401)]])/N # 0.1972
+length(sim1$Z4[sim1$Z4<sort(sim0$Z4)[floor(N*0.0401)]])/N # 0.1865
+length(sim1$Exceedance[sim1$Exceedance<=sort(sim0$Exceedance)[floor(N*0.0401)]])/N  # 0.1909 
+
+# Middelværdi plot for Z2
+df_hist <- data.frame(
+  Z2 = c(sim0$Z2, sim1$Z2),
+  sim = rep(c("Z2_F", "Z2_P"), each = length(sim0$Z2))
+)
+
+histogram <- ggplot(df_hist, aes(x = Z2, fill = sim)) +
+  geom_histogram(position = "identity", alpha = 0.5, binwidth = 0.1, color = "black") +
+  scale_fill_manual(values = c("Z2_F" = "blue", "Z2_P" = "red")) + scale_x_continuous(limits = c(-4, 1.5)) +
+  labs(title = "",
+       x = "Z2",
+       y = "Antal værdier",
+       fill = "Simulation") +
+  theme_minimal()
+
+histogram
+
+mean(sim0$Z2) # 0.004803534
+mean(sim1$Z2) # -0.2901059
+
+# Middelværdi plot for Z4
+
+df_hist <- data.frame(
+  Z4 = c(sim0$Z4, sim1$Z4),
+  sim = rep(c("Z4_F", "Z4_P"), each = length(sim0$Z4))
+)
+
+histogram <- ggplot(df_hist, aes(x = Z4, fill = sim)) +
+  geom_histogram(position = "identity", alpha = 0.5, binwidth = 0.05, color = "black") +
+  scale_fill_manual(values = c("Z4_F" = "blue", "Z4_P" = "red")) + scale_x_continuous(limits = c(-2, 0.6)) +
+  labs(title = "",
+       x = "Z4",
+       y = "Antal værdier",
+       fill = "Simulation") +
+  theme_minimal()
+
+histogram
+
+mean(sim0$Z4) # 0.003600573
+mean(sim1$Z4) # -0.1476322
+
+# Middelværdi plot for VaR-testen
+
+df_hist <- data.frame(
+  VaR1 = c(sim0$Exceedance, sim1$Exceedance),
+  sim = rep(c("VaR1_F", "VaR1_P"), each = length(sim0$Exceedance))
+)
+
+histogram <- ggplot(df_hist, aes(x = VaR1, fill = sim)) +
+  geom_histogram(position = "identity", alpha = 0.5, binwidth = 1, color = "black") +
+  scale_fill_manual(values = c("VaR1_F" = "blue", "VaR1_P" = "red")) + scale_x_continuous(limits = c(-13, 0.5)) +
+  labs(title = "",
+       x = "VaR1",
+       y = "Antal værdier",
+       fill = "Simulation") +
+  theme_minimal()
+
+histogram
+
+mean(sim0$Exceedance) # -2.5261
+mean(sim1$Exceedance) # -3.7014
+
+
+```
+
+
+# Plot 
+```{r}
+VaR_HS_tail <- tail(VaR_HS[11,],n-T)
+ES_HS_tail <- tail(ES_HS[11,],n-T)
+X_tail <- tail(X[11,],n-T)
+var_tail <- tail(var[11,],n-T)
+es_tail <- tail(es[11,],n-T)
+  
+plot <- data.frame(
+  t        = 1:(n-T),
+  returns  = X_tail,
+  VaR      = -VaR_HS_tail,  
+  ES       = -ES_HS_tail
+)
+
+ggplot(plot, aes(x = t)) +
+  geom_line(aes(y = returns, color = "Afkast")) +
+  geom_line(aes(y = VaR, color = "VaR"), linetype = "solid") +
+  geom_line(aes(y = ES, color = "ES"), linetype = "solid") +
+  scale_color_manual(
+    name = "Størrelser",  
+    values = c(
+      "Afkast"               = "black",
+      "VaR"                  = "red",
+      "ES"                   = "blue"
+    )
+  ) +
+  labs(
+    title = "Historisk Simulation",
+    x = "t",
+    y = "Xt"
+  ) +
+  theme_minimal() + theme(legend.position = "none")
+
+
+plot <- data.frame(
+  t        = 1:(n-T),
+  returns  = X_tail,
+  VaR      = -var_tail,  
+  ES       = -es_tail
+)
+
+ggplot(plot, aes(x = t)) +
+  geom_line(aes(y = returns, color = "Afkast")) +
+  geom_line(aes(y = VaR, color = "VaR"), linetype = "solid") +
+  geom_line(aes(y = ES, color = "ES"), linetype = "solid") +
+  scale_color_manual(
+    name = "Størrelser",  
+    values = c(
+      "Afkast"               = "black",
+      "VaR"                  = "red",
+      "ES"                   = "blue"
+    )
+  ) +
+  labs(
+    title = "Reelle Datagenereringsproces",
+    x = "t",
+    y = "Xt"
+  ) +
+  theme_minimal() + theme(legend.position = "none")
+
+
+garch_path <- function(n.sim, n.start, omega, alpha1, beta1, df) {
+  N <- n.sim + n.start
+  Xt <- numeric(N)
+  sigma2t <- numeric(N)
+  Zt <- rstd(N, 0, 1, nu = df)
+  
+  # Initialværdi
+  sigma2t[1] <- omega/(1-alpha1-beta1)
+  Xt[1] <- sqrt(sigma2t[1])*Zt[1]
+  
+  for (t in 2:N) {
+    sigma2t[t] <- omega + alpha1*(Xt[t-1])^2 + beta1*sigma2t[t-1]
+    Xt[t] <- sqrt(sigma2t[t])*Zt[t]
+  }
+  return(list(X = Xt, Xt = Xt[(n.start+1):N], sigma2 = sigma2t[(n.start+1):N]))
+}
+
+omega <- coef_real[1]
+alpha1 <- coef_real[2]
+beta1 <- coef_real[3]
+df <- coef_real[4]
+alpha <- 0.025
+
+
+N <- 1
+n <- 500 
+T <- 250 
+burnin <- 1000
+
+  sigma <- matrix(0,N,n); X <- matrix(0,N,n); var <- matrix(0,N,n); es <- matrix(0,N,n)
+  set.seed(4652374)
+  for (i in 1:N) {
+    path_sim <- garch_path(n, burnin, omega, alpha1, beta1, df)
+    X[i,] <- as.numeric(path_sim$Xt)
+    sigma[i,] <- as.numeric(sqrt(path_sim$sigma2))
+    var[i,] <- -sigma[i,]*qstd(alpha, 0, 1, df)
+    es[i,] <- -sigma[i,]*(integrate(function(q) qstd(q, 0, 1, df), 0, alpha)$value/alpha)
+  }
+
+VaR_HS <- matrix(0, nrow = N, ncol = n)
+ES_HS  <- matrix(0, nrow = N, ncol = n)
+  
+for (i in 1:N){
+  for (m in (T+1):n){
+    retwindow <- X[i,(m-T):(m-1)]
+    
+    VaR_HS[i, m] <- -quantile(retwindow, probs = 0.025, type = 3)
+
+    ES_HS[i, m] <- -mean(retwindow[retwindow < -VaR_HS[i, m]])
+  }
+}
+
+VaR_HS_tail <- tail(VaR_HS[11,],n-T)
+ES_HS_tail <- tail(ES_HS[11,],n-T)
+X_tail <- tail(X[11,],n-T)
+var_tail <- tail(var[11,],n-T)
+es_tail <- tail(es[11,],n-T)
+  
+plot <- data.frame(
+  t        = 1:(n-T),
+  returns  = X_tail,
+  VaR      = -VaR_HS_tail,  
+  ES       = -ES_HS_tail
+)
+
+ggplot(plot, aes(x = t)) +
+  geom_line(aes(y = returns, color = "Afkast")) +
+  geom_line(aes(y = VaR, color = "VaR"), linetype = "solid") +
+  geom_line(aes(y = ES, color = "ES"), linetype = "solid") +
+  scale_color_manual(
+    name = "Størrelser",  
+    values = c(
+      "Afkast"               = "black",
+      "VaR"                  = "red",
+      "ES"                   = "blue"
+    )
+  ) +
+  labs(
+    title = "Historisk Simulation",
+    x = "t",
+    y = "Xt"
+  ) +
+  theme_minimal() + theme(legend.position = "none")
+
+
+plot <- data.frame(
+  t        = 1:(n-T),
+  returns  = X_tail,
+  VaR      = -var_tail,  
+  ES       = -es_tail
+)
+
+ggplot(plot, aes(x = t)) +
+  geom_line(aes(y = returns, color = "Afkast")) +
+  geom_line(aes(y = VaR, color = "VaR"), linetype = "solid") +
+  geom_line(aes(y = ES, color = "ES"), linetype = "solid") +
+  scale_color_manual(
+    name = "Størrelser",  
+    values = c(
+      "Afkast"               = "black",
+      "VaR"                  = "red",
+      "ES"                   = "blue"
+    )
+  ) +
+  labs(
+    title = "Reelle Datagenereringsproces",
+    x = "t",
+    y = "Xt"
+  ) +
+  theme_minimal() + theme(legend.position = "none")
+
+```
+
+
+# Vægtet historisk simulation
+
+```{r}
+garch_path <- function(n.sim, n.start, omega, alpha1, beta1, df) {
+  N <- n.sim + n.start
+  Xt <- numeric(N)
+  sigma2t <- numeric(N)
+  Zt <- rstd(N, 0, 1, nu = df)
+  
+  # Initialværdi
+  sigma2t[1] <- omega/(1-alpha1-beta1)
+  Xt[1] <- sqrt(sigma2t[1])*Zt[1]
+  
+  for (t in 2:N) {
+    sigma2t[t] <- omega + alpha1*(Xt[t-1])^2 + beta1*sigma2t[t-1]
+    Xt[t] <- sqrt(sigma2t[t])*Zt[t]
+  }
+  return(list(X = Xt, Xt = Xt[(n.start+1):N], sigma2 = sigma2t[(n.start+1):N]))
+}
+
+df  <- 5 # df  <- 5
+alpha <- 0.025 # alpha <- 0.025
+alpha1 <- 0.1  # alpha1 <- 0.1 
+beta1 <- 0.85 # beta1 <- 0.85 
+omega <- 0.01 # omega <- 0.01
+
+N <- 10000
+n <- 500 
+T <- 250
+burnin <- 1000
+
+  sigma <- matrix(0,N,n); X <- matrix(0,N,n); var <- matrix(0,N,n); var1 <- matrix(0,N,n); es <- matrix(0,N,n)
+  set.seed(4652374)
+  for (i in 1:N) {
+    path_sim <- garch_path(n, burnin, omega, alpha1, beta1, df)
+    X[i,] <- as.numeric(path_sim$Xt)
+    sigma[i,] <- as.numeric(sqrt(path_sim$sigma2))
+    var[i,] <- -sigma[i,]*qstd(alpha, 0, 1, df)
+    var1[i,] <- -sigma[i,]*qstd(0.01, 0, 1, df)
+    es[i,] <- -sigma[i,]*(integrate(function(q) qstd(q, 0, 1, df), 0, alpha)$value/alpha)
+  }
+
+VaR_HS <- matrix(0, nrow = N, ncol = n)
+VaR1_HS <- matrix(0, nrow = N, ncol = n)
+ES_HS  <- matrix(0, nrow = N, ncol = n)
+ 
+lambda <- 0.995
+weights <- (lambda ^ ((T-1):0)) * (1 - lambda)/ (1-lambda^T)
+
+for (i in 1:N){
+  for (m in (T+1):n){
+    window <- X[i,(m-T):(m-1)]
+    
+    sort_id <- order(window)  
+    sorted_returns <- window[sort_id]
+    sorted_weights <- weights[sort_id]
+    
+    cum_weights <- cumsum(sorted_weights)
+    
+    VaR_index_alpha <- which(cum_weights >= 0.025)[1]
+    VaR_index_beta <- which(cum_weights >= 0.01)[1]
+    
+    VaR_HS[i, m] <- -sorted_returns[VaR_index_alpha]
+    VaR1_HS[i, m] <- -sorted_returns[VaR_index_beta]
+    
+    cumulative_before <- sum(sorted_weights[1:(VaR_index_alpha-1)])
+    adjusted_weight <- 0.025 - cumulative_before
+    sorted_weights[VaR_index_alpha] <- 0.025 - cumulative_before
+    
+    ES_HS[i, m] <- -sum(sorted_returns[1:VaR_index_alpha]*sorted_weights[1:VaR_index_alpha])/0.025
+  }
+}
+
+VaR_HS_tail <- VaR_HS[,(T+1):n]
+VaR1_HS_tail <- VaR1_HS[,(T+1):n]
+ES_HS_tail <- ES_HS[,(T+1):n]
+X_tail <- X[,(T+1):n]
+var_tail <- var[,(T+1):n]
+var1_tail <- var1[,(T+1):n]
+es_tail <- es[,(T+1):n]
+  
+sim <- function(alpha, X, VaR, VaR1, ES) {
+  Z2_path <- matrix(0,N,1); Z4_path <- matrix(0,N,1); Exceedance_path <- matrix(0,N,1)
+  
+  for (i in 1:N) {
+    Z2_path[i] <- Z2(X[i,], VaR[i,], ES[i,], alpha)
+    Z4_path[i] <- Z4(X[i,], VaR[i,], ES[i,], alpha)
+    Exceedance_path[i] <- Exceedance(X[i,], VaR1[i,])
+  }
+  return(list(Z2 = Z2_path, Z4 = Z4_path, Exceedance=Exceedance_path))
+}
+
+sim0 <- sim(0.025, X_tail, var_tail, var1_tail, es_tail)
+sim1 <- sim(0.025, X_tail, VaR_HS_tail, VaR1_HS_tail, ES_HS_tail)
+
+f <- function(p) {
+  quantile(sim0$Exceedance, probs = p, type = 1)
+}
+
+p_value <- seq(0.03, 0.06, length.out = 10000)
+f_values <- sapply(p_value, f)
+valid_p <- p_value[f_values == -6]
+p <- round(max(valid_p), 4)
+p
+
+length(sim1$Z2[sim1$Z2<sort(sim0$Z2)[floor(N*0.0401)]])/N # 0.0792
+length(sim1$Z4[sim1$Z4<sort(sim0$Z4)[floor(N*0.0401)]])/N # 0.0881
+length(sim1$Exceedance[sim1$Exceedance<=sort(sim0$Exceedance)[floor(N*0.0401)]])/N # 0.0757
+
+# HS sti
+n = 500
+stiVaR_HS_tail <- tail(VaR_HS[11,],n-T)
+stiES_HS_tail <- tail(ES_HS[11,],n-T)
+stiX_tail <- tail(X[11,],n-T)
+  
+plot <- data.frame(
+  t        = 1:(n-T),
+  returns  = stiX_tail,
+  VaR      = -stiVaR_HS_tail,  
+  ES       = -stiES_HS_tail
+)
+
+ggplot(plot, aes(x = t)) +
+  geom_line(aes(y = returns, color = "Afkast")) +
+  geom_line(aes(y = VaR, color = "VaR"), linetype = "solid") +
+  geom_line(aes(y = ES, color = "ES"), linetype = "solid") +
+  scale_color_manual(
+    name = "Størrelser",  
+    values = c(
+      "Afkast"               = "black",
+      "VaR"                  = "red",
+      "ES"                   = "blue"
+    )
+  ) +
+  labs(
+    title = "Sandsynlighedsvægtet Historisk Simulation",
+    x = "t",
+    y = "Xt"
+  ) +
+  theme_minimal() + theme(legend.position = "none")
+
+# Middelværdi plot for Z2
+df_hist <- data.frame(
+  Z2 = c(sim0$Z2, sim1$Z2),
+  sim = rep(c("Z2_F", "Z2_P"), each = length(sim0$Z2))
+)
+
+histogram <- ggplot(df_hist, aes(x = Z2, fill = sim)) +
+  geom_histogram(position = "identity", alpha = 0.5, binwidth = 0.1, color = "black") +
+  scale_fill_manual(values = c("Z2_F" = "blue", "Z2_P" = "red")) + scale_x_continuous(limits = c(-4, 1.5)) +
+  labs(title = "",
+       x = "Z2",
+       y = "Antal værdier",
+       fill = "Simulation") +
+  theme_minimal()
+
+histogram
+
+mean(sim0$Z2) # 0.004803534
+mean(sim1$Z2) # -0.1827002
+
+# Middelværdi plot for Z4
+
+df_hist <- data.frame(
+  Z4 = c(sim0$Z4, sim1$Z4),
+  sim = rep(c("Z4_F", "Z4_P"), each = length(sim0$Z4))
+)
+
+histogram <- ggplot(df_hist, aes(x = Z4, fill = sim)) +
+  geom_histogram(position = "identity", alpha = 0.5, binwidth = 0.05, color = "black") +
+  scale_fill_manual(values = c("Z4_F" = "blue", "Z4_P" = "red")) + scale_x_continuous(limits = c(-2, 0.6)) +
+  labs(title = "",
+       x = "Z4",
+       y = "Antal værdier",
+       fill = "Simulation") +
+  theme_minimal()
+
+histogram
+
+mean(sim0$Z4) # 0.003600573
+mean(sim1$Z4) # -0.1093856
+
+# Middelværdi plot for VaR-testen
+
+df_hist <- data.frame(
+  VaR1 = c(sim0$Exceedance, sim1$Exceedance),
+  sim = rep(c("VaR1_F", "VaR1_P"), each = length(sim0$Exceedance))
+)
+
+histogram <- ggplot(df_hist, aes(x = VaR1, fill = sim)) +
+  geom_histogram(position = "identity", alpha = 0.5, binwidth = 1, color = "black") +
+  scale_fill_manual(values = c("VaR1_F" = "blue", "VaR1_P" = "red")) + scale_x_continuous(limits = c(-13, 0.5)) +
+  labs(title = "",
+       x = "VaR1",
+       y = "Antal værdier",
+       fill = "Simulation") +
+  theme_minimal()
+
+histogram
+
+mean(sim0$Exceedance) # -2.4703
+mean(sim1$Exceedance) # -3.1878
+
+
+```
+
+
+
+# GJR-GARCH
+
+```{r}
+gjr_garch_path <- function(n.sim, n.start, omega, alpha1, beta1, gamma, df) {
+  N <- n.sim + n.start
+  Xt <- numeric(N)
+  sigma2t <- numeric(N)
+  Zt <- rstd(N, 0, 1, nu = df)
+  
+  # Initialværdi
+  sigma2t[1] <- omega/(1-alpha1-beta1-gamma/2)
+  Xt[1] <- sqrt(sigma2t[1])*Zt[1]
+  
+  for (t in 2:N) {
+    sigma2t[t] <- omega + alpha1*(Xt[t-1])^2 + gamma*(Xt[t-1])^2*(Xt[t-1]<0) + beta1*sigma2t[t-1] 
+    Xt[t] <- sqrt(sigma2t[t])*Zt[t]
+  }
+  return(list(X = Xt, Xt = Xt[(n.start+1):N], sigma2 = sigma2t[(n.start+1):N]))
+}
+
+df  <- 10
+alpha <- 0.025
+alpha1 <- 0.1 
+beta1 <- 0.8 
+omega <- 0.1
+gamma <- 0.1
+
+N <- 10^4
+n <- 500 
+T <- 250
+burnin <- 1000
+
+  sigma <- matrix(0,N,n); X <- matrix(0,N,n); var <- matrix(0,N,n); var1 <- matrix(0,N,n); es <- matrix(0,N,n)
+  set.seed(4652374)
+  for (i in 1:N) {
+    path_sim <- gjr_garch_path(n, burnin, omega, alpha1, beta1, gamma, df)
+    X[i,] <- as.numeric(path_sim$Xt)
+    sigma[i,] <- as.numeric(sqrt(path_sim$sigma2))
+    var[i,] <- -sigma[i,]*qstd(alpha, 0, 1, df)
+    var1[i,] <- -sigma[i,]*qstd(0.01, 0, 1, df)
+    es[i,] <- -sigma[i,]*(integrate(function(q) qstd(q, 0, 1, df), 0, alpha)$value/alpha)
+  }
+
+VaR_HS <- matrix(0, nrow = N, ncol = n)
+VaR1_HS <- matrix(0, nrow = N, ncol = n)
+ES_HS  <- matrix(0, nrow = N, ncol = n)
+  
+N <- 10^4
+n <- 500 
+T <- 250
+
+for (i in 1:N){
+  for (m in (T+1):n){
+    retwindow <- X[i,(m-T):(m-1)]
+
+    VaR_HS[i, m] <- -quantile(retwindow, probs = 0.025)
+    VaR1_HS[i, m] <- -quantile(retwindow, probs = 0.01)
+    ES_HS[i, m] <- -mean(retwindow[retwindow < -VaR_HS[i, m]])
+  }
+}
+
+VaR_HS_tail <- VaR_HS[,(T+1):n]
+VaR1_HS_tail <- VaR1_HS[,(T+1):n]
+ES_HS_tail <- ES_HS[,(T+1):n]
+X_tail <- X[,(T+1):n]
+var_tail <- var[,(T+1):n]
+var1_tail <- var1[,(T+1):n]
+es_tail <- es[,(T+1):n]
+  
+sim <- function(alpha, X, VaR, VaR1, ES) {
+  Z2_path <- matrix(0,N,1); Z4_path <- matrix(0,N,1); Exceedance_path <- matrix(0,N,1)
+  
+  for (i in 1:N) {
+    Z2_path[i] <- Z2(X[i,], VaR[i,], ES[i,], alpha)
+    Z4_path[i] <- Z4(X[i,], VaR[i,], ES[i,], alpha)
+    Exceedance_path[i] <- Exceedance(X[i,], VaR1[i,])
+  }
+  return(list(Z2 = Z2_path, Z4 = Z4_path, Exceedance=Exceedance_path))
+}
+
+sim0 <- sim(0.025, X_tail, var_tail, var1_tail, es_tail)
+sim1 <- sim(0.025, X_tail, VaR_HS_tail, VaR1_HS_tail, ES_HS_tail)
+
+
+
+```
+
+# Plot 
+```{r}
+gjr_garch_path <- function(n.sim, n.start, omega, alpha1, beta1, gamma, df) {
+  N <- n.sim + n.start
+  Xt <- numeric(N)
+  sigma2t <- numeric(N)
+  Zt <- rstd(N, 0, 1, nu = df)
+  
+  # Initialværdi
+  sigma2t[1] <- omega/(1-alpha1-beta1-gamma/2)
+  Xt[1] <- sqrt(sigma2t[1])*Zt[1]
+  
+  for (t in 2:N) {
+    sigma2t[t] <- omega + alpha1*(Xt[t-1])^2 + gamma*(Xt[t-1])^2*(Xt[t-1]<0) + beta1*sigma2t[t-1]
+    Xt[t] <- sqrt(sigma2t[t])*Zt[t]
+  }
+  return(list(X = Xt, Xt = Xt[(n.start+1):N], sigma2 = sigma2t[(n.start+1):N]))
+}
+
+df  <- 10
+alpha <- 0.025
+alpha1 <- 0.1 
+beta1 <- 0.6 
+omega <- 0.05
+gamma <- 0.5
+
+N <- 1
+n <- 500 
+T <- 250 
+burnin <- 1000
+
+  sigma <- matrix(0,N,n); X <- matrix(0,N,n); var <- matrix(0,N,n); es <- matrix(0,N,n)
+  set.seed(4652374)
+  for (i in 1:N) {
+    path_sim <- garch_path(n, burnin, omega, alpha1, beta1, df)
+    X[i,] <- as.numeric(path_sim$Xt)
+    sigma[i,] <- as.numeric(sqrt(path_sim$sigma2))
+    var[i,] <- -sigma[i,]*qstd(alpha, 0, 1, df)
+    es[i,] <- -sigma[i,]*(integrate(function(q) qstd(q, 0, 1, df), 0, alpha)$value/alpha)
+  }
+
+VaR_HS <- matrix(0, nrow = N, ncol = n)
+ES_HS  <- matrix(0, nrow = N, ncol = n)
+  
+for (i in 1:N){
+  for (m in (T+1):n){
+    retwindow <- X[i,(m-T):(m-1)]
+    
+    VaR_HS[i, m] <- -quantile(retwindow, probs = 0.025, type = 3)
+
+    ES_HS[i, m] <- -mean(retwindow[retwindow < -VaR_HS[i, m]])
+  }
+}
+
+VaR_HS_tail <- tail(VaR_HS[1,],n-T)
+ES_HS_tail <- tail(ES_HS[1,],n-T)
+X_tail <- tail(X[1,],n-T)
+var_tail <- tail(var[1,],n-T)
+es_tail <- tail(es[1,],n-T)
+  
+plot <- data.frame(
+  t        = 1:(n-T),
+  returns  = X_tail,
+  VaR      = -VaR_HS_tail,  
+  ES       = -ES_HS_tail
+)
+
+ggplot(plot, aes(x = t)) +
+  geom_line(aes(y = returns, color = "Afkast")) +
+  geom_line(aes(y = VaR, color = "VaR"), linetype = "solid") +
+  geom_line(aes(y = ES, color = "ES"), linetype = "solid") +
+  scale_color_manual(
+    name = "Størrelser",  
+    values = c(
+      "Afkast"               = "black",
+      "VaR"                  = "red",
+      "ES"                   = "blue"
+    )
+  ) +
+  labs(
+    title = "Historisk Simulation",
+    x = "t",
+    y = "Xt"
+  ) +
+  theme_minimal() + theme(legend.position = "none")
+
+
+plot <- data.frame(
+  t        = 1:(n-T),
+  returns  = X_tail,
+  VaR      = -var_tail,  
+  ES       = -es_tail
+)
+
+ggplot(plot, aes(x = t)) +
+  geom_line(aes(y = returns, color = "Afkast")) +
+  geom_line(aes(y = VaR, color = "VaR"), linetype = "solid") +
+  geom_line(aes(y = ES, color = "ES"), linetype = "solid") +
+  scale_color_manual(
+    name = "Størrelser",  
+    values = c(
+      "Afkast"               = "black",
+      "VaR"                  = "red",
+      "ES"                   = "blue"
+    )
+  ) +
+  labs(
+    title = "Reelle Datagenereringsproces",
+    x = "t",
+    y = "Xt"
+  ) +
+  theme_minimal() + theme(legend.position = "none")
+
+
+```
+
+
+
+
+
