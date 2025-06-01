@@ -1,5 +1,6 @@
 ---
 title: "GARCH ACERBI"
+author: "Daniel Riazi"
 output: html_document
 date: "2025-03-21"
 ---
@@ -9,9 +10,7 @@ knitr::opts_chunk$set(echo = TRUE)
 library(rugarch)
 library(fGarch)
 library(ggplot2)
-library(esback)
 library(scales)
-library(quantmod)
 ```
 
 ```{r}
@@ -28,19 +27,19 @@ Z3 <- function(Xt, sigma, alpha, df){
   T <- length(Xt)
   integer <- floor(T*alpha)
   
-  EVanalytical <- -(T/integer)*(integrate(function(x) {pbeta(1 - x, T - integer, integer)*qstd(x, 0, 1, df)}, 0, 1)$value*sigma)
+  EVanalytical <- -(T/integer)*(integrate(function(x) {pbeta(1 - x, T - integer, integer)*qstd(x, 0, 1, df)}, 0, 1, subdivisions = 1000, rel.tol = 1e-6, stop.on.error = FALSE)$value*sigma)
   
-  Ut <- pstd(Xt, 0, sigma, df)
-  qt <- qstd(Ut, 0, 1, df)
+  Ut <- pdist("std", Xt, 0, sigma, shape=df)
   ESestimate <- numeric(T)
   
   for (t in 1:T){
-    Y <- sigma[t]*qt
+    Y <- qdist("std", Ut, 0, sigma[t], shape=df)
     ESestimate[t] <- -(1/integer)*sum(sort(Y)[1:integer])
   }
   
   return(-mean(ESestimate/EVanalytical)+1)
 }
+
 
 Z4 <- function(Xt, VaR, ES, alpha) {
   T <- length(Xt)
@@ -56,7 +55,7 @@ garch_path_h1 <- function(n.sim, n.start, omega, alpha1, beta1, Xt) {
   sigma2t <- numeric(N)
   
   # Initialværdi
-  sigma2t[1] <- omega/(1-alpha1-beta1)
+  sigma2t[1] <- omega + beta1*omega/(1-alpha1-beta1)
   
   for (t in 2:N) {
     sigma2t[t] <- omega + alpha1*(Xt[t-1])^2 + beta1*sigma2t[t-1]
@@ -71,7 +70,7 @@ garch_path <- function(n.sim, n.start, omega, alpha1, beta1, df) {
   Zt <- rstd(N, 0, 1, nu = df)
   
   # Initialværdi
-  sigma2t[1] <- omega/(1-alpha1-beta1)
+  sigma2t[1] <- omega + beta1*omega/(1-alpha1-beta1)
   Xt[1] <- sqrt(sigma2t[1])*Zt[1]
   
   for (t in 2:N) {
@@ -171,8 +170,8 @@ geom_vline(xintercept = 2, linetype = "solid", color = "darkgrey") +
     x = "Antal frihedsgrader",
     y = "Power",
     title = "Ændre antallet af frihedsgrader",
-    color = "Teststatistik",
-    shape = "Teststatistik"
+    color = "Teststørrelse",
+    shape = "Teststørrelse"
   ) + theme_minimal() + theme(panel.grid.major.x = element_blank())
 
 
@@ -211,44 +210,16 @@ df_plot <- data.frame(
   exceed   = exceedances
 )
 
-# Plot med ggplot2
+# Plot 
 ggplot(df_plot, aes(x = t)) +
-  # Afkast (sort linje)
-  geom_line(aes(y = returns, color = "Afkast")) +
-  
-  # VaR (rød linje, stiplet)
+  geom_line(aes(y = returns, color = "Afkastrate")) +
   geom_line(aes(y = VaR, color = "VaR"), linetype = "solid") +
-  
-  # ES (blå linje, stiplet)
   geom_line(aes(y = ES, color = "ES"), linetype = "solid") +
-  
-  # Punkter for overskridelser (samme farve som VaR, men punktmarkering)
   geom_point(
     data = subset(df_plot, exceed == 1),
     aes(y = returns, color = "Overskridelse af VaR"),
-    size = 2
-  ) +
-  
-  # Definer farver og legendetekst
-  scale_color_manual(
-    name = "Størrelser",  # Titel på legend
-    values = c(
-      "Afkast"               = "black",
-      "VaR"                  = "red",
-      "ES"                   = "blue",
-      "Overskridelse af VaR" = "red"
-    )
-  ) +
-  
-  # Titel og aksetitler
-  labs(
-    title = "H0",
-    x = "t",
-    y = "Xt"
-  ) +
-  
-  # Eventuelt et 'theme', f.eks. minimal
-  theme_minimal()
+    size = 2) + scale_color_manual( name = "Størrelser", values = c("Afkastrate" = "black", "VaR" = "red", "ES" = "blue", "Overskridelse af VaR" = "red")) +
+  labs(title = "", x = "t", y = "Xt") + theme_minimal()
 
 ```
 
@@ -279,6 +250,10 @@ ESH1 <- sigmaH0*(integrate(function(q) qstd(q, 0, 1, df0), 0, alpha)$value/alpha
 
 ES_real <- sigmaH1*(integrate(function(q) qstd(q, 0, 1, df1), 0, alpha)$value/alpha)
 
+VaRH1 <- sigmaH0*qstd(0.025, 0, 1, df0)
+
+VaR_real <- sigmaH1*qstd(0.025, 0, 1, df1)
+
 df1_plot <- data.frame(
   t        = 1:T,
   returns  = Xt[1:T],
@@ -304,6 +279,32 @@ ggplot(df1_plot, aes(x = t)) +
     y = "Xt"
   ) +
   theme_minimal()  + theme(legend.position = "none")
+
+df1_plot1 <- data.frame(
+  t        = 1:T,
+  returns  = Xt[1:T],
+  VaRH1     = VaRH1,
+  VaR_real     = VaR_real
+)
+
+ggplot(df1_plot1, aes(x = t)) +
+  geom_line(aes(y = returns, color = "Afkast")) +
+  geom_line(aes(y = VaRH1, color = "ES H1"), linetype = "dashed") +
+  geom_line(aes(y = VaR_real, color = "Reelle ES"), linetype = "solid") +
+  scale_color_manual(
+    name = "Størrelser",
+    values = c(
+      "Afkast"  = "black",
+      "ES H1"   = "blue",
+      "Reelle ES"   = "lightblue"
+    )
+  ) +
+  labs(
+    title = "",
+    x = "Tid (t)",
+    y = "Xt"
+  ) +
+  theme_minimal()  + theme(legend.position = "none")
 ```
 
 
@@ -314,7 +315,7 @@ garch_path_h1 <- function(n.sim, n.start, omega, alpha1, beta1, Xt) {
   sigma2t <- numeric(N)
   
   # Initialværdi
-  sigma2t[1] <- omega/(1-alpha1-beta1)
+  sigma2t[1] <- omega + beta1*omega/(1-alpha1-beta1)
   
   for (t in 2:N) {
     sigma2t[t] <- omega + alpha1*(Xt[t-1])^2 + beta1*sigma2t[t-1]
@@ -329,7 +330,7 @@ garch_path <- function(n.sim, n.start, omega, alpha1, beta1, df) {
   Zt <- rstd(N, 0, 1, nu = df)
   
   # Initialværdi
-  sigma2t[1] <- omega/(1-alpha1-beta1)
+  sigma2t[1] <- omega + beta1*omega/(1-alpha1-beta1)
   Xt[1] <- sqrt(sigma2t[1])*Zt[1]
   
   for (t in 2:N) {
@@ -429,8 +430,8 @@ geom_vline(xintercept = 0.2, linetype = "solid", color = "darkgrey") +
     x = "Ubetingede varians",
     y = "Power",
     title = "Ændre den ubetingede varians",
-    color = "Teststatistik",
-    shape = "Teststatistik"
+    color = "Teststørrelse",
+    shape = "Teststørrelse"
   ) + theme_minimal() + theme(panel.grid.major.x = element_blank(), panel.grid.minor.x = element_blank())
 
 ```
@@ -461,6 +462,9 @@ sigmaH0 <- as.numeric(sqrt(path_values$sigma2))
 ESH1 <- sigmaH0*(integrate(function(q) qstd(q, 0, 1, df), 0, alpha)$value/alpha)
 ES_real <- sigmaH1*(integrate(function(q) qstd(q, 0, 1, df), 0, alpha)$value/alpha)
 
+VaRH1 <- sigmaH0*qstd(0.025, 0, 1, df)
+VaR_real <- sigmaH1*qstd(0.025, 0, 1, df)
+
 omega1_plot <- data.frame(
   t        = 1:T,
   returns  = Xt[1:T],
@@ -474,47 +478,35 @@ ggplot(omega1_plot, aes(x = t)) +
   geom_line(aes(y = ES_real, color = "Reelle ES"), linetype = "solid") +
   scale_color_manual(
     name = "Størrelser",
-    values = c(
-      "Afkast"  = "black",
-      "ES H1"   = "blue",
-      "Reelle ES"   = "lightblue"
-    )
-  ) +
-  labs(
-    title = "",
-    x = "Tid (t)",
-    y = "Xt"
-  ) +
-  theme_minimal()  + theme(legend.position = "none")
+    values = c("Afkast"  = "black","ES H1"   = "blue","Reelle ES"   = "lightblue")) +
+  labs(title = "", x = "Tid (t)", y = "Xt") + theme_minimal()  + theme(legend.position = "none")
+
+omega1_plot1 <- data.frame(
+  t        = 1:T,
+  returns  = Xt[1:T],
+  VaRH1       = VaRH1,
+  VaR_real = VaR_real
+)
+
+ggplot(omega1_plot1, aes(x = t)) +
+  geom_line(aes(y = returns, color = "Afkast")) +
+  geom_line(aes(y = VaRH1, color = "ES H1"), linetype = "dashed") +
+  geom_line(aes(y = VaR_real, color = "Reelle ES"), linetype = "solid") +
+  scale_color_manual(
+    name = "Størrelser",
+    values = c("Afkast"  = "black","ES H1"   = "blue","Reelle ES"   = "lightblue")) +
+  labs(title = "", x = "Tid (t)", y = "Xt") + theme_minimal()  + theme(legend.position = "none")
 ```
 
 # ARCH parameter
 ```{r}
-Z3 <- function(Xt, sigma, alpha, df){
-  T <- length(Xt)
-  integer <- floor(T*alpha)
-  
-  EVanalytical <- -(T/integer)*(integrate(function(x) {pbeta(1 - x, T - integer, integer)*qstd(x, 0, 1, df)}, 0, 1, subdivisions = 1000, rel.tol = 1e-6, stop.on.error = FALSE)$value*sigma)
-  
-  Ut <- pstd(Xt, 0, sigma, df)
-  qt <- qstd(Ut, 0, 1, df)
-  ESestimate <- numeric(T)
-  
-  for (t in 1:T){
-    Y <- sigma[t]*qt
-    ESestimate[t] <- -(1/integer)*sum(sort(Y)[1:integer])
-  }
-  
-  return(-mean(ESestimate/EVanalytical)+1)
-}
-
 garch_path_h1 <- function(n.sim, n.start, omega, alpha1, beta1, Xt) {
   N <- n.sim + n.start
   sigma2t <- numeric(N)
   beta1 <- beta1-alpha1
   
   # Initialværdi
-  sigma2t[1] <- omega/(1-alpha1-beta1)
+  sigma2t[1] <- omega + beta1*omega/(1-alpha1-beta1)
   
   for (t in 2:N) {
     sigma2t[t] <- omega + alpha1*(Xt[t-1])^2 + beta1*sigma2t[t-1]
@@ -530,7 +522,7 @@ garch_path <- function(n.sim, n.start, omega, alpha1, beta1, df) {
   beta1 <- beta1-alpha1
   
   # Initialværdi
-  sigma2t[1] <- omega/(1-alpha1-beta1)
+  sigma2t[1] <- omega + beta1*omega/(1-alpha1-beta1)
   Xt[1] <- sqrt(sigma2t[1])*Zt[1]
   
   for (t in 2:N) {
@@ -627,9 +619,9 @@ geom_vline(xintercept = 3, linetype = "solid", color = "darkgrey") +
   labs(
     x = "ARCH parameter",
     y = "Power",
-    title = "Ændre reaktionen til de kvadrerede afkast",
-    color = "Teststatistik",
-    shape = "Teststatistik"
+    title = "Ændre ARCH parameteren",
+    color = "Teststørrelse",
+    shape = "Teststørrelse"
   ) + theme_minimal() + theme(panel.grid.major.x = element_blank(), panel.grid.minor.x = element_blank())
 
 ```
@@ -653,16 +645,16 @@ path_sim1 <- garch_path(T, burnin, omega, alpha1, beta1, df)
 X <- path_sim1$X
 Xt <- path_sim1$Xt
 sigmaH1 <- as.numeric(sqrt(path_sim1$sigma2))
-muH1 <- as.numeric(path_sim1$mu)
 
 path_values <- garch_path_h1(T, burnin, omega, alpha0, beta1, X)
 sigmaH0 <- as.numeric(sqrt(path_values$sigma2))
-muH0 <- as.numeric(path_values$mu)
     
 ESH1 <- sigmaH0*(integrate(function(q) qstd(q, 0, 1, df), 0, alpha)$value/alpha)
 
 ES_real <- sigmaH1*(integrate(function(q) qstd(q, 0, 1, df), 0, alpha)$value/alpha)
 
+VaRH1 <- sigmaH0*qstd(0.025, 0, 1, df)
+VaR_real <- sigmaH1*qstd(0.025, 0, 1, df)
 
 alpha1_plot <- data.frame(
   t        = 1:T,
@@ -676,20 +668,21 @@ ggplot(alpha1_plot, aes(x = t)) +
   geom_line(aes(y = returns, color = "Afkast")) +
   geom_line(aes(y = ESH1, color = "ES H1"), linetype = "dashed") +
   geom_line(aes(y = ES_real, color = "Reelle ES"), linetype = "solid") +
-  scale_color_manual(
-    name = "Størrelser",
-    values = c(
-      "Afkast"  = "black",
-      "ES H1"   = "blue",
-      "Reelle ES"   = "lightblue"
-    )
-  ) +
-  labs(
-    title = "",
-    x = "Tid (t)",
-    y = "Xt"
-  ) +
-  theme_minimal()  + theme(legend.position = "none")
+  scale_color_manual( name = "Størrelser",values = c("Afkast"  = "black", "ES H1"   = "blue", "Reelle ES"   = "lightblue")) +labs( title = "", x = "Tid (t)", y = "Xt") + theme_minimal()  + theme(legend.position = "none")
+
+alpha1_plot1 <- data.frame(
+  t        = 1:T,
+  returns  = Xt[1:T], 
+  VaRH1       = VaRH1,
+  VaR_real = VaR_real
+)
+
+
+ggplot(alpha1_plot1, aes(x = t)) +
+  geom_line(aes(y = returns, color = "Afkast")) +
+  geom_line(aes(y = VaRH1, color = "ES H1"), linetype = "dashed") +
+  geom_line(aes(y = VaR_real, color = "Reelle ES"), linetype = "solid") +
+  scale_color_manual( name = "Størrelser",values = c("Afkast"  = "black", "ES H1"   = "blue", "Reelle ES"   = "lightblue")) +labs( title = "", x = "Tid (t)", y = "Xt") + theme_minimal()  + theme(legend.position = "none")
 
 ```
 
@@ -701,7 +694,7 @@ garch_path_h1 <- function(n.sim, n.start, omega, alpha1, beta1, Xt, d) {
   sigma2t <- numeric(N)
   
   # Initialværdi
-  sigma2t[1] <- omega/(1-alpha1-beta1)
+  sigma2t[1] <- omega + beta1*omega/(1-alpha1-beta1)
   alpha1 <- d*alpha1
   beta1 <- d*beta1
   omega <- sigma2t[1]*(1-alpha1-beta1)
@@ -719,7 +712,7 @@ garch_path <- function(n.sim, n.start, omega, alpha1, beta1, df, d) {
   Zt <- rstd(N, 0, 1, nu = df)
   
   # Initialværdi
-  sigma2t[1] <- omega/(1-alpha1-beta1)
+  sigma2t[1] <- omega + beta1*omega/(1-alpha1-beta1)
   alpha1 <- d*alpha1
   beta1 <- d*beta1
   omega <- sigma2t[1]*(1-alpha1-beta1)
@@ -819,8 +812,8 @@ geom_vline(xintercept = 6, linetype = "solid", color = "darkgrey") +
     x = "Persistensen",
     y = "Power",
     title = "Ændre persistensen",
-    color = "Test Statistik",
-    shape = "Test Statistik"
+    color = "Teststørrelse",
+    shape = "Teststørrelse"
   ) + theme_minimal() + theme(panel.grid.major.x = element_blank(), panel.grid.minor.x = element_blank())
 
 ```
@@ -847,17 +840,17 @@ X <- path_sim1$X
 Xt <- path_sim1$Xt
 
 sigmaH1 <- as.numeric(sqrt(path_sim1$sigma2))
-muH1 <- as.numeric(path_sim1$mu)
 
 path_values <- garch_path_h1(T, burnin, omega, alpha1, beta1, X, d0)
 
 sigmaH0 <- as.numeric(sqrt(path_values$sigma2))
-muH0 <- as.numeric(path_values$mu)
     
 ESH1 <- sigmaH0*(integrate(function(q) qstd(q, 0, 1, df), 0, alpha)$value/alpha)
 
 ES_real <- sigmaH1*(integrate(function(q) qstd(q, 0, 1, df), 0, alpha)$value/alpha)
 
+VaRH1 <- sigmaH0*qstd(0.025, 0, 1, df)
+VaR_real <- sigmaH1*qstd(0.025, 0, 1, df)
 
 persistens_plot <- data.frame(
   t        = 1:T,
@@ -870,20 +863,20 @@ ggplot(persistens_plot, aes(x = t)) +
   geom_line(aes(y = returns, color = "Afkast")) +
   geom_line(aes(y = ESH1, color = "ES H1"), linetype = "dashed") +
   geom_line(aes(y = ES_real, color = "Reelle ES"), linetype = "solid") +
-  scale_color_manual(
-    name = NULL,
-    values = c(
-      "Afkast"  = "black",
-      "ES H1"   = "blue",
-      "Reelle ES"   = "lightblue"
-    )
-  ) +
-  labs(
-    title = "",
-    x = "Tid (t)",
-    y = "Xt"
-  ) +
-  theme_minimal() + theme(legend.position = "none")
+  scale_color_manual(name = NULL, values = c("Afkast"  = "black","ES H1"   = "blue","Reelle ES"   = "lightblue")) +labs(title = "",x = "Tid (t)",y = "Xt") + theme_minimal() + theme(legend.position = "none")
+
+persistens_plot1 <- data.frame(
+  t        = 1:T,
+  returns  = Xt[1:T],  
+  VaRH1       = VaRH1,
+  VaR_real = VaR_real
+)
+
+ggplot(persistens_plot1, aes(x = t)) +
+  geom_line(aes(y = returns, color = "Afkast")) +
+  geom_line(aes(y = VaRH1, color = "ES H1"), linetype = "dashed") +
+  geom_line(aes(y = VaR_real, color = "Reelle ES"), linetype = "solid") +
+  scale_color_manual(name = NULL, values = c("Afkast"  = "black","ES H1"   = "blue","Reelle ES"   = "lightblue")) +labs(title = "",x = "Tid (t)",y = "Xt") + theme_minimal() + theme(legend.position = "none")
 
 ```
 
