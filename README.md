@@ -1,3 +1,3 @@
 # Bachelorprojekt_Daniel_Riazi
 
-Dette er hele min kode til bachelorprojektet. 
+Dette er hele min kode til bachelorprojektet. I Acerbi2014 filen ses min kode til det simple tilfælde for Z1, Z2, Z3, Z4 og VaR-testen. Der er både power-tabeller, plots og ES/VaR-tabeller. I Acerbi2023 filen ses min kode til eksempel 4.3 i Acerbi2023-artiklen samt koden til eksperimentet for stikprøvestørrelsens indvirkning på poweren af teststørrelserne. I ACERBI GARCH filen ses min kode til poweren af testene i sensitivitetsanalysen, som er baseret på Bayer & Dimitriadis eksperimenter. I Historic filen ses min kode til alt udregning af afvisningsrater og plots for teststørrelserne under Historisk Simulation og Sandsynlighedsvægtet Historisk Simulation. 
