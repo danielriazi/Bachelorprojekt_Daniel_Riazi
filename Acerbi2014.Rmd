@@ -1,0 +1,3207 @@
+---
+title: "Artiklen"
+author: "Daniel Riazi"
+output: html_document
+date: "2025-02-10"
+---
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+library(ggplot2)
+library(dplyr)
+library(gridExtra)
+library(fGarch)
+library(patchwork)
+theme_set(theme_minimal())
+```
+
+# Student-t fordeling med forskellige gammaer
+
+```{r}
+data <- data.frame(x = seq(-6, 6, length.out = 1000), gamma = c(1, 1.1, 1.2, 1.5))
+data$Density <- dt(data$x / data$gamma, df = 100) / data$gamma
+
+# Plot
+ggplot(data, aes(x = x, y = Density, color = factor(gamma))) +
+  geom_line(linewidth=1) +
+  scale_x_continuous(breaks = seq(-6, 6, by = 2), minor_breaks = seq(-6, 6, by = 2)) +
+  labs(title = "Student t-fordeling", x = "x", y = "Tæthed", color = "Gamma") + scale_color_manual(values = c("1" = "blue", "1.1" = "red", "1.2" = "#808000", "1.5" = "darkred"))
+```
+
+# ES Tabel
+```{r}
+# df = 100
+
+ES <- function(df, alpha){
+  -integrate(function(q) qt(q, df), 0, alpha)$value / alpha}
+VaR <- function(df, alpha){
+  -qt(alpha, df) }
+
+gam1 <- round(ES(100, 0.025)/ES(100, 0.05), 4)
+gam2 <- round(ES(100, 0.025)/ES(100, 0.1), 4)
+  
+round(ES(100, 0.025)*1, 2)
+round(ES(100, 0.025)*gam1, 2)
+round(ES(100, 0.025)*gam2, 2)
+
+round(VaR(100, 0.01)*1, 2)
+round(VaR(100, 0.01)*gam1, 2)
+round(VaR(100, 0.01)*gam2, 2)
+
+round(VaR(100, 0.025)*1, 2)
+round(VaR(100, 0.025)*gam1, 2)
+round(VaR(100, 0.025)*gam2, 2)
+
+# df = 5
+gam1 <- round(ES(5, 0.025)/ES(5, 0.05), 4)
+gam2 <- round(ES(5, 0.025)/ES(5, 0.1), 4)
+  
+round(ES(5, 0.025)*1, 2)
+round(ES(5, 0.025)*gam1, 2)
+round(ES(5, 0.025)*gam2, 2)
+
+round(VaR(5, 0.01)*1, 2)
+round(VaR(5, 0.01)*gam1, 2)
+round(VaR(5, 0.01)*gam2, 2)
+
+round(VaR(5, 0.025)*1, 2)
+round(VaR(5, 0.025)*gam1, 2)
+round(VaR(5, 0.025)*gam2, 2)
+```
+
+# ES Tabel 
+```{r}
+# Student-t
+VaR <- function(df, alpha){
+  -qt(alpha, df) }
+
+ES <- function(df, alpha){
+  -integrate(function(q) qt(q, df), 0, alpha)$value / alpha}
+
+round(ES(100, 0.025), 2)
+round(ES(10, 0.025), 2)
+round(ES(5, 0.025), 2)
+round(ES(3, 0.025), 2)
+
+round(VaR(100, 0.01), 2)
+round(VaR(10, 0.01), 2)
+round(VaR(5, 0.01), 2)
+round(VaR(3, 0.01), 2)
+
+round(VaR(100, 0.025), 2)
+round(VaR(10, 0.025), 2)
+round(VaR(5, 0.025), 2)
+round(VaR(3, 0.025), 2)
+
+# Standardiseret Student-t
+VaR <- function(df, alpha){
+  -qstd(alpha, 0, 1, df) }
+
+ES <- function(df, alpha){
+  -integrate(function(q) qstd(q, 0, 1, df), 0, alpha)$value / alpha}
+
+round(ES(100, 0.025), 2)
+round(ES(10, 0.025), 2)
+round(ES(5, 0.025), 2)
+round(ES(3, 0.025), 2)
+
+round(VaR(100, 0.01), 2)
+round(VaR(10, 0.01), 2)
+round(VaR(5, 0.01), 2)
+round(VaR(3, 0.01), 2)
+
+round(VaR(100, 0.025), 2)
+round(VaR(10, 0.025), 2)
+round(VaR(5, 0.025), 2)
+round(VaR(3, 0.025), 2)
+
+```
+
+# ES Tabel
+```{r}
+# Student-t
+
+ES <- function(df0, df1, alpha){
+  -integrate(function(q) qt(q, df0), 0, alpha)$value / alpha - qt(0.025, df1)+qt(0.025, df0)}
+VaR <- function(df0, df1, alpha){
+  -qt(alpha, df0) - qt(0.025, df1)+qt(0.025, df0) }
+
+round(ES(100, 100, 0.025), 2)
+round(ES(10, 100, 0.025), 2)
+round(ES(5, 100, 0.025), 2)
+round(ES(3, 100, 0.025), 2)
+
+round(VaR(100, 100, 0.01), 2)
+round(VaR(10, 100, 0.01), 2)
+round(VaR(5, 100, 0.01), 2)
+round(VaR(3, 100, 0.01), 2)
+
+# Fixed værdi
+round(VaR(100, 100, 0.025), 2)
+round(VaR(10, 100, 0.025), 2)
+round(VaR(5, 100, 0.025), 2)
+round(VaR(3, 100, 0.025), 2)
+
+# Standardiseret Student-t
+
+ES <- function(df0, df1, alpha){
+  -integrate(function(q) qstd(q, 0, 1, df0), 0, alpha)$value / alpha - qstd(0.025, 0,1, df1)+qstd(0.025, 0,1, df0)}
+VaR <- function(df0, df1, alpha){
+  -qstd(alpha, 0,1, df0) - qstd(0.025,0,1, df1)+qstd(0.025,0,1, df0) }
+
+round(ES(100, 100, 0.025), 2)
+round(ES(10, 100, 0.025), 2)
+round(ES(5, 100, 0.025), 2)
+round(ES(3, 100, 0.025), 2)
+
+round(VaR(100, 100, 0.01), 2)
+round(VaR(10, 100, 0.01), 2)
+round(VaR(5, 100, 0.01), 2)
+round(VaR(3, 100, 0.01), 2)
+
+# Fixed værdi
+round(VaR(100, 100, 0.025), 2)
+round(VaR(10, 100, 0.025), 2)
+round(VaR(5, 100, 0.025), 2)
+round(VaR(3, 100, 0.025), 2)
+
+```
+
+# Student-t fordeling med forskellige frihedsgrader
+
+```{r}
+data <- data.frame(x = seq(-6, 6, length.out = 1000), df = c(100, 10, 5, 3))
+data$Density <- dt(data$x, df = data$df)
+
+ggplot(data, aes(x = x, y = Density, color = factor(df))) +
+  geom_line(linewidth=1) +
+  scale_x_continuous(breaks = seq(-6, 6, by = 2), minor_breaks = seq(-6, 6, by = 2)) +
+  labs(title = "Student t-fordeling", x = "x", y = "Tæthed", color = "Frihedsgrader") + scale_color_manual(values = c("100" = "blue", "10" = "red", "5" = "#808000", "3" = "darkred"))
+```
+
+# Standardiseret Student-t fordeling med forskellige frihedsgrader
+
+```{r}
+data <- data.frame(x = seq(-6, 6, length.out = 10000), df = c(100, 10, 5, 3))
+data$Density <- dstd(data$x, 0, 1, nu = data$df)
+
+ggplot(data, aes(x = x, y = Density, color = factor(df))) +
+  geom_line(linewidth=1) +  
+  scale_x_continuous(breaks = seq(-6, 6, by = 2), minor_breaks = seq(-6, 6, by = 2)) +
+  labs(title = "Standardiseret Student t-fordeling", x = "x", y = "Tæthed", color = "Frihedsgrader") +
+  scale_color_manual(values = c("100" = "blue", "10" = "red", "5" = "#808000", "3" = "darkred"))
+```
+
+# Fixed VaR(2.5%) for Student t-fordelinger
+
+```{r}
+x <- seq(-6, 6, length.out = 10000)
+df <- c(100, 10, 5, 3)
+q <- qt(0.025, df = 100)
+data <- data.frame()
+for(i in seq_along(df)) {
+  tmp <- data.frame(
+    x = x,
+    Density = dt(x + qt(0.025, df = df[i]) - q, df = df[i]),
+    df = factor(df[i])
+  )
+  data <- rbind(data, tmp)
+}
+
+ggplot(data, aes(x = x, y = Density, color = df)) +
+  geom_line(linewidth = 1) + geom_vline(xintercept = q, linetype = "solid", color = "black") +
+  scale_x_continuous(breaks = seq(-6, 6, by = 2), minor_breaks = seq(-6, 6, by = 2)) +
+   labs(title = "Student t-fordeling med fixed VaR(2,5%)", x = "x", y = "Tæthed", color = "Frihedsgrader") + scale_color_manual(values = c("100" = "blue", "10" = "red", "5" = "#808000", "3" = "darkred")) 
+```
+
+# Fixed VaR(2.5%) illustration i teori
+
+```{r}
+x <- seq(-6, 6, length.out = 10000)
+df <- c(100, 3)
+alpha <- 0.025
+q <- qt(alpha, df = 100)  
+
+
+data <- data.frame()
+for(i in seq_along(df)) {
+  tmp <- data.frame(
+    x = x,
+    Density = dt(x + qt(0.025, df = df[i]) - q, df = df[i]),
+    df = factor(df[i])
+  )
+  data <- rbind(data, tmp)
+}
+
+ES <- function(df0, df1, alpha){
+  -integrate(function(q) qt(q, df0), 0, alpha)$value / alpha - qt(0.025, df1)+qt(0.025, df0)} 
+
+ESblue <- -ES(100, 100, 0.025)
+ESred <- -ES(3, 100, 0.025)
+
+# Plot
+ggplot(data, aes(x = x, y = Density, color = df)) +
+  geom_line(linewidth = 1) +
+  geom_vline(xintercept = q, linetype = "solid", color = "black", linewidth = 1) +
+  geom_vline(xintercept = ESblue, linetype = "dashed", color = "blue", linewidth = 1) +
+  geom_vline(xintercept = ESred, linetype = "dashed", color = "red", linewidth = 1) +
+  scale_x_continuous(breaks = seq(-6, 6, by = 2)) +
+  labs(
+    title = "Student t-fordeling med fixed VaR(2,5%)",
+    x = "x",
+    y = "Tæthed",
+    color = "Frihedsgrader"
+  ) +
+  scale_color_manual(values = c("100" = "blue", "3" = "red")) +
+  theme_minimal()
+```
+
+# Fixed VaR(2.5%) for Standardiseret Student t-fordelinger
+
+```{r}
+x <- seq(-6, 6, length.out = 10000)
+df <- c(100, 10, 5, 3)
+q <- qstd(0.025, 0, 1, nu = 100)
+data <- data.frame()
+for(i in seq_along(df)) {
+  tmp <- data.frame(
+    x = x,
+    Density = dstd(x + qstd(0.025, 0, 1, nu = df[i]) - q, 0, 1, nu = df[i]),
+    df = factor(df[i])
+  )
+  data <- rbind(data, tmp)
+}
+
+ggplot(data, aes(x = x, y = Density, color = df)) +
+  geom_line(linewidth = 1) + geom_vline(xintercept = q, linetype = "solid", color = "black") +
+  scale_x_continuous(breaks = seq(-6, 6, by = 2), minor_breaks = seq(-6, 6, by = 2)) +
+   labs(title = "Standardiseret Student t-fordeling med fixed VaR(2,5%)", x = "x", y = "Tæthed", color = "Frihedsgrader") + scale_color_manual(values = c("100" = "blue", "10" = "red", "5" = "#808000", "3" = "darkred")) 
+```
+
+
+# Figur 3 og 4
+
+```{r}
+Z2_sim <- function(df0, gam) {
+  T <- 250
+  N <- 10^5
+  alpha <- 0.025
+  ES <- -integrate(function(q) qt(q, df0), 0, alpha)$value/alpha
+  VaR <- -qt(alpha,df0)
+  num <- T*alpha*ES
+  Z <- vector("numeric", N)
+  set.seed(4652374)
+  for (j in 1:N) {
+    Xt <- gam*rt(T, df0)
+    Z[j] <- sum(Xt*(Xt + VaR < 0))/(num)+1
+  }
+  return(Z)
+}
+
+Z3_sim <- function(df0, gam) {
+  T <- 250
+  N <- 10^5
+  alpha <- 0.025
+  integer <- floor(T*alpha)
+  Z <- vector("numeric", N)
+  set.seed(4652374)
+  for (j in 1:N){
+    lowestXt <- sort(gam*rt(T, df0))[1:integer]
+    ESestimator <- -sum(lowestXt)/integer
+    integrale <- integrate(function(q) pbeta(1-q,T-integer,integer)*qt(q,df0), 0, 1)$value
+    EVanalytical <- -integrale*(T/integer)
+    
+    Z[j] <- -(ESestimator/EVanalytical)+1
+  }
+  return(Z)
+}
+
+Z4_sim <- function(df0, gam) {
+  T <- 250
+  N <- 10^5
+  alpha <- 0.025
+  ES <- -integrate(function(q) qt(q, df0), 0, alpha)$value/alpha
+  VaR <- -qt(alpha,df0)
+  num <- T*alpha*ES
+  Z <- vector("numeric", N)
+  set.seed(4652374)
+  for (j in 1:N) {
+    Xt <- gam*rt(T, df0)
+    Z[j] <- sum((alpha*(-VaR)+(Xt+VaR)*(Xt + VaR < 0))/(num))+1
+  }
+  return(Z)
+}
+
+numExceedances_sim <- function(df0, gam){
+  T <- 250
+  N <- 10^5
+  beta <- 0.01
+  VaR <- -qt(beta,df0)
+  Exceedance <- vector("numeric", N)
+  set.seed(4652374)
+  for (j in 1:N){
+    Xt <- gam*rt(T,df0)
+    Exceedance[j] <- -sum((Xt + VaR < 0))
+  }
+  return(Exceedance)}
+
+```
+
+
+## Figur 3 - Test 2
+
+```{r}
+# For Z2 med forskellige gammaer og df = 100
+f3Test2_H0 <- Z2_sim(100, 1)
+f3Test2_H1 <- Z2_sim(100, 1.1366)
+f3Test2_H2 <- Z2_sim(100, 1.3395)
+
+# Plot CDF
+n <- 1000
+c0 <- ecdf(f3Test2_H0)
+c1 <- ecdf(f3Test2_H1)
+c2 <- ecdf(f3Test2_H2)
+
+x <- seq(-4, 1, length.out = n)
+
+cdf_data <- data.frame(x = x, y = c(c0(x), 1 - c1(x), 1 - c2(x)),
+                       gamma = rep(c("1", "1.1366", "1.3395"), each = n))
+
+green5 <- quantile(f3Test2_H0, probs = 0.05)
+green10 <- quantile(f3Test2_H0, probs = 0.10)
+black5 <- quantile(f3Test2_H0, probs = 0.04174)
+black10 <- quantile(f3Test2_H0, probs = 0.10786)
+
+lines <- tibble(lines = c(green5, green10, black5, black10), group = c("green", "green", "black", "black"))
+
+cdf <- ggplot(cdf_data, aes(x = x, y = y, color = gamma)) +
+  geom_line(linewidth = 1) + geom_vline(data = lines, aes(xintercept = lines, color = group)) +
+  labs(title = "ES2.5% | Test2",x = "", y = "Fordelingsfunktion", color = "Gamma") + scale_y_continuous(breaks = seq(0, 1, by = 0.1), minor_breaks = seq(0, 1, by = 0.1)) + scale_x_continuous(breaks = seq(-3.5, 0.5, by = 0.5), minor_breaks = seq(-3.5, 0.5, by = 0.5), limits = c(-4,1) ) + scale_color_manual(values = c("1" = "blue", "1.1366" = "red", "1.3395" = "#808000", "green" = "green", "black" = "black")) +theme(legend.position = "none")
+
+# Plot PDF
+d0 <- density(f3Test2_H0, n = n)
+d1 <- density(f3Test2_H1, n = n)
+d2 <- density(f3Test2_H2, n = n)
+
+pdf_data <- data.frame(x = c(d0$x, d1$x, d2$x), y = c(d0$y, d1$y, d2$y),
+                       gamma = rep(c("1", "1.1366", "1.3395"), each = n))
+
+pdf <- ggplot(pdf_data, aes(x = x, y = y, color = gamma)) +
+  geom_line(linewidth = 1) +
+  labs(title = "", x = "", y = "Tæthed", color = "Gamma") + scale_y_continuous(breaks = seq(0, 5, by = 0.5), minor_breaks = seq(0, 5, by = 0.5)) + scale_x_continuous(breaks = seq(-3.5, 0.5, by = 0.5), minor_breaks = seq(-3.5, 0.5, by = 0.5), limits = c(-4,1) ) + scale_color_manual(values = c("1" = "blue", "1.1366" = "red", "1.3395" = "#808000")) +theme(legend.position = "none")
+
+# Power
+Test2p1 <- c1(quantile(f3Test2_H0, probs = 0.04174))
+Test2p2 <- c2(quantile(f3Test2_H0, probs = 0.04174))
+Test2p3 <- c1(quantile(f3Test2_H0, probs = 0.10786))
+Test2p4 <- c2(quantile(f3Test2_H0, probs = 0.10786))
+
+cdf / pdf + plot_layout(heights = c(2, 1))
+```
+
+## Figur 3 - Test 3
+
+```{r}
+# For Z3 med forskellige gammaer og df = 100
+f3Test3_H0 <- Z3_sim(100, 1)
+f3Test3_H1 <- Z3_sim(100, 1.1366)
+f3Test3_H2 <- Z3_sim(100, 1.3395)
+
+# Plot CDF
+n <- 1000
+c0 <- ecdf(f3Test3_H0)
+c1 <- ecdf(f3Test3_H1)
+c2 <- ecdf(f3Test3_H2)
+
+x <- seq(-0.7, 0.2, length.out = n)
+
+green5 <- quantile(f3Test3_H0, probs = 0.05)
+green10 <- quantile(f3Test3_H0, probs = 0.10)
+black5 <- quantile(f3Test3_H0, probs = 0.04174)
+black10 <- quantile(f3Test3_H0, probs = 0.10786)
+
+lines <- tibble(lines = c(green5, green10, black5, black10), group = c("green", "green", "black", "black"))
+
+cdf_data <- data.frame(x = x, y = c(c0(x), 1 - c1(x), 1 - c2(x)),
+                       gamma = rep(c("1", "1.1366", "1.3395"), each = n))
+
+cdf <- ggplot(cdf_data, aes(x = x, y = y, color = gamma)) +
+  geom_line(linewidth = 1) + geom_vline(data = lines, aes(xintercept = lines, color = group)) +
+  labs(title = "ES2.5% | Test3",x = "", y = "Fordelingsfunktion", color = "Gamma") + scale_y_continuous(breaks = seq(0, 1, by = 0.1), minor_breaks = seq(0, 1, by = 0.1)) + scale_x_continuous(breaks = seq(-0.8, 0.2, by = 0.1), minor_breaks = seq(-0.8, 0.2, by = 0.1), limits = c(-0.7, 0.2)) + scale_color_manual(values = c("1" = "blue", "1.1366" = "red", "1.3395" = "#808000", "green"= "green", "black"= "black")) +theme(legend.position = "none")
+
+# Plot PDF
+d0 <- density(f3Test3_H0, n = n)
+d1 <- density(f3Test3_H1, n = n)
+d2 <- density(f3Test3_H2, n = n)
+
+pdf_data <- data.frame(x = c(d0$x, d1$x, d2$x), y = c(d0$y, d1$y, d2$y),
+                       gamma = rep(c("1", "1.1366", "1.3395"), each = n))
+
+pdf <- ggplot(pdf_data, aes(x = x, y = y, color = gamma)) +
+  geom_line(linewidth = 1) + labs(title = "", x = "", y = "Tæthed", color = "Gamma") + scale_y_continuous(breaks = seq(0, 5, by = 2), minor_breaks = seq(0, 5, by = 2)) + scale_x_continuous(breaks = seq(-0.8, 0.2, by = 0.1), minor_breaks = seq(-0.8, 0.2, by = 0.1), limits = c(-0.7, 0.2)) + scale_color_manual(values = c("1" = "blue", "1.1366" = "red", "1.3395" = "#808000")) +theme(legend.position = "none")
+
+# Power
+Test3p1 <- c1(quantile(f3Test3_H0, probs = 0.04174))
+Test3p2 <- c2(quantile(f3Test3_H0, probs = 0.04174))
+Test3p3 <- c1(quantile(f3Test3_H0, probs = 0.10786))
+Test3p4 <- c2(quantile(f3Test3_H0, probs = 0.10786))
+
+cdf / pdf + plot_layout(heights = c(2, 1))
+```
+
+# Figur 3 - Test 4
+
+```{r}
+# For Z3 med forskellige gammaer og df = 100
+f3Test4_H0 <- Z4_sim(100, 1)
+f3Test4_H1 <- Z4_sim(100, 1.1366)
+f3Test4_H2 <- Z4_sim(100, 1.3395)
+
+# Plot CDF
+n <- 1000
+c0 <- ecdf(f3Test4_H0)
+c1 <- ecdf(f3Test4_H1)
+c2 <- ecdf(f3Test4_H2)
+
+x <- seq(-1, 0.2, length.out = n)
+
+cdf_data <- data.frame(x = x, y = c(c0(x), 1 - c1(x), 1 - c2(x)),
+                       gamma = rep(c("1", "1.1366", "1.3395"), each = n))
+
+green5 <- quantile(f3Test4_H0, probs = 0.05)
+green10 <- quantile(f3Test4_H0, probs = 0.10)
+black5 <- quantile(f3Test4_H0, probs = 0.04174)
+black10 <- quantile(f3Test4_H0, probs = 0.10786)
+
+lines <- tibble(lines = c(green5, green10, black5, black10), group = c("green", "green", "black", "black"))
+
+cdf <- ggplot(cdf_data, aes(x = x, y = y, color = gamma)) +
+  geom_line(linewidth = 1) + geom_vline(data = lines, aes(xintercept = lines, color = group)) +
+  labs(title = "ES2.5% | Test4",x = "", y = "Fordelingsfunktion", color = "Gamma") + scale_y_continuous(breaks = seq(0, 1, by = 0.1), minor_breaks = seq(0, 1, by = 0.1)) + scale_x_continuous(breaks = seq(-1, 0.2, by = 0.2), minor_breaks = seq(-1, 0.2, by = 0.2), limits = c(-1, 0.2)) + scale_color_manual(values = c("1" = "blue", "1.1366" = "red", "1.3395" = "#808000", "green"= "green", "black"= "black")) +theme(legend.position = "none")
+
+# Plot PDF
+d0 <- density(f3Test4_H0, n = n)
+d1 <- density(f3Test4_H1, n = n)
+d2 <- density(f3Test4_H2, n = n)
+
+pdf_data <- data.frame(x = c(d0$x, d1$x, d2$x), y = c(d0$y, d1$y, d2$y),
+                       gamma = rep(c("1", "1.1366", "1.3395"), each = n))
+
+pdf <- ggplot(pdf_data, aes(x = x, y = y, color = gamma)) +
+  geom_line(linewidth = 1) + labs(title = "", x = "", y = "Tæthed", color = "Gamma") + scale_y_continuous(breaks = seq(0, 5, by = 2), minor_breaks = seq(0, 5, by = 2)) + scale_x_continuous(breaks = seq(-1, 0.2, by = 0.2), minor_breaks = seq(-1, 0.2, by = 0.2), limits = c(-1, 0.2)) + scale_color_manual(values = c("1" = "blue", "1.1366" = "red", "1.3395" = "#808000"))  +theme(legend.position = "none")
+
+# Power
+Test4p1 <- c1(quantile(f3Test4_H0, probs = 0.04174))
+Test4p2 <- c2(quantile(f3Test4_H0, probs = 0.04174))
+Test4p3 <- c1(quantile(f3Test4_H0, probs = 0.10786))
+Test4p4 <- c2(quantile(f3Test4_H0, probs = 0.10786))
+
+cdf / pdf + plot_layout(heights = c(2, 1))
+```
+
+## Figur 3 - numExceedances
+
+```{r}
+# For numExceedances med forskellige gammaer og df = 100
+f3numExceedances_H0 <- numExceedances_sim(100, 1)
+f3numExceedances_H1 <- numExceedances_sim(100, 1.1366)
+f3numExceedances_H2 <- numExceedances_sim(100, 1.3395)
+
+#sig-niveau
+f <- function(p) {
+  quantile(f3numExceedances_H0, probs = p)
+}
+p6_value <- seq(0.038, 0.05, length.out = 10000)
+f6_values <- sapply(p6_value, f)
+valid_p6 <- p6_value[f6_values == -6]
+p6 <- round(max(valid_p6), 6)
+p6
+
+p5_value <- seq(0.1035, 0.115, length.out = 10000)
+f5_values <- sapply(p5_value, f)
+valid_p5 <- p5_value[f5_values == -5]
+p5 <- round(max(valid_p5), 6)
+p5
+
+# Plot CDF
+n <- 1000
+c0 <- ecdf(f3numExceedances_H0)
+c1 <- ecdf(f3numExceedances_H1)
+c2 <- ecdf(f3numExceedances_H2)
+
+x <- seq(-18, 0, length.out = n)
+
+cdf_data <- data.frame(x = x, y = c(c0(x), 1 - c1(x), 1 - c2(x)),
+                       gamma = rep(c("1", "1.1366", "1.3395"), each = n))
+
+
+black5 <- quantile(f3numExceedances_H0, probs = 0.04174)
+black10 <- quantile(f3numExceedances_H0, probs = 0.10786)
+
+lines <- tibble(lines = c(black5, black10), group = c( "black", "black"))
+
+cdf <- ggplot(cdf_data, aes(x = x, y = y, color = gamma)) +
+  geom_line(linewidth = 1) + geom_vline(data = lines, aes(xintercept = lines, color = group))+
+  labs(title = "VaR1% | numExceedances",x = "", y = "Fordelingsfunktion", color = "Gamma") + scale_y_continuous(breaks = seq(0, 1, by = 0.1), minor_breaks = seq(0, 1, by = 0.1)) + scale_x_continuous(breaks = seq(-18, 0, by = 2), minor_breaks = seq(-18, 2, by = 2), limits = c(-18,0)) + scale_color_manual(values = c("1" = "blue", "1.1366" = "red", "1.3395" = "#808000", "black" = "black")) + theme(legend.position = "none")
+
+# Plot PDF
+d0 <- density(f3numExceedances_H0, n = n)
+d1 <- density(f3numExceedances_H1, n = n)
+d2 <- density(f3numExceedances_H2, n = n)
+
+pdf_data <- data.frame(x = c(d0$x, d1$x, d2$x), y = c(d0$y, d1$y, d2$y),
+                       gamma = rep(c("1", "1.1366", "1.3395"), each = n))
+
+pdf <- ggplot(pdf_data, aes(x = x, y = y, color = gamma)) +
+  geom_line(linewidth = 1) + labs(title = "", x = "", y = "Tæthed", color = "Gamma") + scale_y_continuous(breaks = seq(0, 4, by = 0.5), minor_breaks = seq(0, 4, by = 0.5)) + scale_x_continuous(breaks = seq(-18, 0, by = 2), minor_breaks = seq(-18, 2, by = 2), limits = c(-18,0)) + scale_color_manual(values = c("1" = "blue", "1.1366" = "red", "1.3395" = "#808000"))  + theme(legend.position = "none")
+
+# Power
+numEp1 <- c1(quantile(f3numExceedances_H0, probs = 0.04174))
+numEp2 <- c2(quantile(f3numExceedances_H0, probs = 0.04174))
+numEp3 <- c1(quantile(f3numExceedances_H0, probs = 0.10786))
+numEp4 <- c2(quantile(f3numExceedances_H0, probs = 0.10786))
+
+cdf / pdf + plot_layout(heights = c(2, 1))
+
+# Udregning af sig-niveau og power for VaR ved at bruge dens binomial-fordeling
+#numExceedances_sim <- function(df0, gam){
+ # T <- 250
+  #N <- 10^5
+#  beta <- 0.01
+#  VaR <- -qt(beta,df0)
+#  Exceedance <- vector("numeric", N)
+#  set.seed(4652374)
+#  for (j in 1:N){
+#    Xt <- gam*rt(T,df0)
+#    Exceedance[j] <- sum((Xt + VaR < 0))
+#  }
+ # return(Exceedance)}
+
+
+#f3numExceedances_H0 <- numExceedances_sim(100, 1)
+#f3numExceedances_H1 <- numExceedances_sim(100, 1.1366)
+#c0 <- ecdf(f3numExceedances_H0)
+#c1 <- ecdf(f3numExceedances_H1)
+#1-c1(5) # 0.38485
+#1-length(f3numExceedances_H1[f3numExceedances_H1 < 6])/10^5
+
+```
+
+## Figur 4 - Test 2
+
+```{r}
+# For Z2 med forskellige gammaer og df = 5
+f4Test2_H0 <- Z2_sim(5, 1)
+f4Test2_H1 <- Z2_sim(5, 1.2185)
+f4Test2_H2 <- Z2_sim(5, 1.5296)
+
+# Plot CDF
+n <- 1000
+c0 <- ecdf(f4Test2_H0)
+c1 <- ecdf(f4Test2_H1)
+c2 <- ecdf(f4Test2_H2)
+
+x <- seq(-4.5, 1, length.out = n)
+
+cdf_data <- data.frame(x = x, y = c(c0(x), 1 - c1(x), 1 - c2(x)),
+                       gamma = rep(c("1", "1.2185", "1.5296"), each = n))
+
+green5 <- quantile(f4Test2_H0, probs = 0.05)
+green10 <- quantile(f4Test2_H0, probs = 0.10)
+black5 <- quantile(f4Test2_H0, probs = 0.04242)
+black10 <- quantile(f4Test2_H0, probs = 0.1093)
+
+lines <- tibble(lines = c(green5, green10, black5, black10), group = c("green", "green", "black", "black"))
+
+cdf <- ggplot(cdf_data, aes(x = x, y = y, color = gamma)) +
+  geom_line(linewidth = 1) + geom_vline(data = lines, aes(xintercept = lines, color = group))+
+  labs(title = "ES2.5% | Test2",x = "", y = "Fordelingsfunktion", color = "Gamma") + scale_y_continuous(breaks = seq(0, 1, by = 0.1), minor_breaks = seq(0, 1, by = 0.1)) + scale_x_continuous(breaks = seq(-4, 0, by = 0.5), minor_breaks = seq(-4, 0, by = 0.5), limits = c(-4.5,1)) + scale_color_manual(values = c("1" = "blue", "1.2185" = "red", "1.5296" = "#808000", "green"= "green", "black"= "black")) +theme(legend.position = "none")
+
+# Plot PDF
+d0 <- density(f4Test2_H0, n = n)
+d1 <- density(f4Test2_H1, n = n)
+d2 <- density(f4Test2_H2, n = n)
+
+pdf_data <- data.frame(x = c(d0$x, d1$x, d2$x), y = c(d0$y, d1$y, d2$y),
+                       gamma = rep(c("1", "1.2185", "1.5296"), each = n))
+
+pdf <- ggplot(pdf_data, aes(x = x, y = y, color = gamma)) +
+  geom_line(linewidth = 1) + labs(title = "", x = "", y = "Tæthed", color = "Gamma") + scale_y_continuous(breaks = seq(0, 5, by = 0.5), minor_breaks = seq(0, 5, by = 0.5)) + scale_x_continuous(breaks = seq(-4, 0, by = 0.5), minor_breaks = seq(-4, 0, by = 0.5), limits = c(-4.5,1)) + scale_color_manual(values = c("1" = "blue", "1.2185" = "red", "1.5296" = "#808000")) +theme(legend.position = "none")
+
+# Power
+Test2p5 <- c1(quantile(f4Test2_H0, probs = 0.04242))
+Test2p6 <- c2(quantile(f4Test2_H0, probs = 0.04242))
+Test2p7 <- c1(quantile(f4Test2_H0, probs = 0.1093))
+Test2p8 <- c2(quantile(f4Test2_H0, probs = 0.1093))
+
+cdf / pdf + plot_layout(heights = c(2, 1))
+```
+
+## Figur 4 - Test 3
+
+```{r}
+# For Z3 med forskellige gammaer og df = 5
+f4Test3_H0 <- Z3_sim(5, 1)
+f4Test3_H1 <- Z3_sim(5, 1.2185)
+f4Test3_H2 <- Z3_sim(5, 1.5296)
+
+# Plot CDF
+n <- 1000
+c0 <- ecdf(f4Test3_H0)
+c1 <- ecdf(f4Test3_H1)
+c2 <- ecdf(f4Test3_H2)
+
+x <- seq(-1.2, 0.3, length.out = n)
+
+cdf_data <- data.frame(x = x, y = c(c0(x), 1 - c1(x), 1 - c2(x)),
+                       gamma = rep(c("1", "1.2185", "1.5296"), each = n))
+
+green5 <- quantile(f4Test3_H0, probs = 0.05)
+green10 <- quantile(f4Test3_H0, probs = 0.10)
+black5 <- quantile(f4Test3_H0, probs = 0.04242)
+black10 <- quantile(f4Test3_H0, probs = 0.1093)
+
+lines <- tibble(lines = c(green5, green10, black5, black10), group = c("green", "green", "black", "black"))
+
+cdf <- ggplot(cdf_data, aes(x = x, y = y, color = gamma)) +
+  geom_line(linewidth = 1) +geom_vline(data = lines, aes(xintercept = lines, color = group))+
+  labs(title = "ES2.5% | Test3",x = "", y = "Fordelingsfunktion", color = "Gamma") + scale_y_continuous(breaks = seq(0, 1, by = 0.1), minor_breaks = seq(0, 1, by = 0.1)) + scale_x_continuous(breaks = seq(-1.2, 0.3, by = 0.2), minor_breaks = seq(-1.2, 0.3, by = 0.2), label = scales::label_number(accuracy = 0.1), limits = c(-1.2,0.3)) + scale_color_manual(values = c("1" = "blue", "1.2185" = "red", "1.5298" = "#808000", "green"= "green", "black"= "black")) +theme(legend.position = "none")
+
+# Plot PDF
+d0 <- density(f4Test3_H0, n = n)
+d1 <- density(f4Test3_H1, n = n)
+d2 <- density(f4Test3_H2, n = n)
+
+pdf_data <- data.frame(x = c(d0$x, d1$x, d2$x), y = c(d0$y, d1$y, d2$y),
+                       gamma = rep(c("1", "1.2185", "1.5296"), each = n))
+
+pdf <- ggplot(pdf_data, aes(x = x, y = y, color = gamma)) +
+  geom_line(linewidth = 1) + labs(title = "", x = "", y = "Tæthed", color = "Gamma") + scale_y_continuous(breaks = seq(0, 5, by = 0.5), minor_breaks = seq(0, 5, by = 0.5)) + scale_x_continuous(breaks = seq(-1.2, 0.3, by = 0.2), minor_breaks = seq(-1.2, 0.3, by = 0.2), label = scales::label_number(accuracy = 0.1), limits = c(-1.2,0.3)) + scale_color_manual(values = c("1" = "blue", "1.2185" = "red", "1.5298" = "#808000"))  +theme(legend.position = "none")
+
+# Power
+Test3p5 <- c1(quantile(f4Test3_H0, probs = 0.04242))
+Test3p6 <- c2(quantile(f4Test3_H0, probs = 0.04242))
+Test3p7 <- c1(quantile(f4Test3_H0, probs = 0.1093))
+Test3p8 <- c2(quantile(f4Test3_H0, probs = 0.1093))
+
+cdf / pdf + plot_layout(heights = c(2, 1))
+```
+
+## Figur 4 - Test 4
+
+```{r}
+# For Z3 med forskellige gammaer og df = 5
+f4Test4_H0 <- Z4_sim(5, 1)
+f4Test4_H1 <- Z4_sim(5, 1.2185)
+f4Test4_H2 <- Z4_sim(5, 1.5296)
+
+# Plot CDF
+n <- 1000
+c0 <- ecdf(f4Test4_H0)
+c1 <- ecdf(f4Test4_H1)
+c2 <- ecdf(f4Test4_H2)
+
+x <- seq(-1.4, 0.3, length.out = n)
+
+cdf_data <- data.frame(x = x, y = c(c0(x), 1 - c1(x), 1 - c2(x)),
+                       gamma = rep(c("1", "1.2185", "1.5296"), each = n))
+
+green5 <- quantile(f4Test4_H0, probs = 0.05)
+green10 <- quantile(f4Test4_H0, probs = 0.10)
+black5 <- quantile(f4Test4_H0, probs = 0.04242)
+black10 <- quantile(f4Test4_H0, probs = 0.1093)
+
+lines <- tibble(lines = c(green5, green10, black5, black10), group = c("green", "green", "black", "black"))
+
+cdf <- ggplot(cdf_data, aes(x = x, y = y, color = gamma)) +
+  geom_line(linewidth = 1) +geom_vline(data = lines, aes(xintercept = lines, color = group)) +
+  labs(title = "ES2.5% | Test4",x = "", y = "Fordelingsfunktion", color = "Gamma") + scale_y_continuous(breaks = seq(0, 1, by = 0.1), minor_breaks = seq(0, 1, by = 0.1)) + scale_x_continuous(breaks = seq(-1.4, 0.3, by = 0.2), minor_breaks = seq(-1.4, 0.3, by = 0.2), label = scales::label_number(accuracy = 0.1), limits = c(-1.4,0.3)) + scale_color_manual(values = c("1" = "blue", "1.2185" = "red", "1.5296" = "#808000", "green"= "green", "black"= "black"))+theme(legend.position = "none")
+
+# Plot PDF
+d0 <- density(f4Test4_H0, n = n)
+d1 <- density(f4Test4_H1, n = n)
+d2 <- density(f4Test4_H2, n = n)
+
+pdf_data <- data.frame(x = c(d0$x, d1$x, d2$x), y = c(d0$y, d1$y, d2$y),
+                       gamma = rep(c("1", "1.2185", "1.5296"), each = n))
+
+pdf <- ggplot(pdf_data, aes(x = x, y = y, color = gamma)) +
+  geom_line(linewidth = 1) + labs(title = "", x = "", y = "Tæthed", color = "Gamma") + scale_y_continuous(breaks = seq(0, 5, by = 0.5), minor_breaks = seq(0, 5, by = 0.5)) + scale_x_continuous(breaks = seq(-1.4, 0.3, by = 0.2), minor_breaks = seq(-1.4, 0.3, by = 0.2), label = scales::label_number(accuracy = 0.1), limits = c(-1.4,0.3)) + scale_color_manual(values = c("1" = "blue", "1.2185" = "red", "1.5296" = "#808000"))  +theme(legend.position = "none")
+
+# Power
+Test4p5 <- c1(quantile(f4Test4_H0, probs = 0.04242))
+Test4p6 <- c2(quantile(f4Test4_H0, probs = 0.04242))
+Test4p7 <- c1(quantile(f4Test4_H0, probs = 0.1093))
+Test4p8 <- c2(quantile(f4Test4_H0, probs = 0.1093))
+
+cdf / pdf + plot_layout(heights = c(2, 1))
+```
+
+## Figur 4 - numExceedances
+
+```{r}
+# For numExceedances med forskellige gammaer og df = 100
+f4numExceedances_H0 <- numExceedances_sim(5, 1)
+f4numExceedances_H1 <- numExceedances_sim(5, 1.2185)
+f4numExceedances_H2 <- numExceedances_sim(5, 1.5298)
+
+#sig-niveau
+f <- function(p) {
+  quantile(f4numExceedances_H0, probs = p)
+}
+p6_value <- seq(0.038, 0.05, length.out = 10000)
+f6_values <- sapply(p6_value, f)
+valid_p6 <- p6_value[f6_values == -6]
+p6 <- round(max(valid_p6), 6)
+p6
+
+p5_value <- seq(0.1035, 0.115, length.out = 10000)
+f5_values <- sapply(p5_value, f)
+valid_p5 <- p5_value[f5_values == -5]
+p5 <- round(max(valid_p5), 6)
+p5
+
+# Plot CDF
+n <- 1000
+c0 <- ecdf(f4numExceedances_H0)
+c1 <- ecdf(f4numExceedances_H1)
+c2 <- ecdf(f4numExceedances_H2)
+
+x <- seq(-17, 0, length.out = n)
+
+cdf_data <- data.frame(x = x, y = c(c0(x), 1 - c1(x), 1 - c2(x)),
+                       gamma = rep(c("1", "1.2185", "1.5296"), each = n))
+
+black5 <- quantile(f4numExceedances_H0, probs = 0.04242)
+black10 <- quantile(f4numExceedances_H0, probs = 0.1093)
+
+lines <- tibble(lines = c(black5, black10), group = c("black", "black"))
+
+cdf <- ggplot(cdf_data, aes(x = x, y = y, color = gamma)) +
+  geom_line(linewidth = 1) +geom_vline(data = lines, aes(xintercept = lines, color = group))+
+  labs(title = "VaR1% | numExceedances",x = "", y = "Fordelingsfunktion", color = "Gamma") + scale_y_continuous(breaks = seq(0, 1, by = 0.1), minor_breaks = seq(0, 1, by = 0.1)) + scale_x_continuous(breaks = seq(-16, 0, by = 2), minor_breaks = seq(-16, 2, by = 2), limits = c(-17,0)) + scale_color_manual(values = c("1" = "blue", "1.2185" = "red", "1.5296" = "#808000", "black"= "black")) +theme(legend.position = "none")
+
+# Plot PDF
+d0 <- density(f4numExceedances_H0, n = n)
+d1 <- density(f4numExceedances_H1, n = n)
+d2 <- density(f4numExceedances_H2, n = n)
+
+pdf_data <- data.frame(x = c(d0$x, d1$x, d2$x), y = c(d0$y, d1$y, d2$y),
+                       gamma = rep(c("1", "1.2185", "1.5296"), each = n))
+
+pdf <- ggplot(pdf_data, aes(x = x, y = y, color = gamma)) +
+  geom_line(linewidth = 1) + labs(title = "", x = "", y = "Tæthed", color = "Gamma") + scale_y_continuous(breaks = seq(0, 5, by = 0.5), minor_breaks = seq(0, 5, by = 0.5)) + scale_x_continuous(breaks = seq(-16, 0, by = 2), minor_breaks = seq(-16, 2, by = 2), limits = c(-17,0)) + scale_color_manual(values = c("1" = "blue", "1.2185" = "red", "1.5296" = "#808000"))  +theme(legend.position = "none")
+
+# Power
+numEp5 <- c1(quantile(f4numExceedances_H0, probs = 0.04242))
+numEp6 <- c2(quantile(f4numExceedances_H0, probs = 0.04242))
+numEp7 <- c1(quantile(f4numExceedances_H0, probs = 0.1093))
+numEp8 <- c2(quantile(f4numExceedances_H0, probs = 0.1093))
+
+cdf / pdf + plot_layout(heights = c(2, 1))
+```
+
+## Tabel 1
+
+```{r}
+gam <- rep(c(21.9, 53),4)
+alpha <- rep(c(5, 10),4)
+sig <- c(rep(4.1,2), rep(10.6,2), rep(4,2), rep(10.8,2))
+df <- c(rep(5,4), rep(100,4))
+
+Test2p <- c(Test2p5,Test2p6, Test2p7, Test2p8, Test2p1, Test2p2, Test2p3, Test2p4)
+Test3p <- c(Test3p5,Test3p6, Test3p7, Test3p8, Test3p1, Test3p2, Test3p3, Test3p4)
+Test4p <- c(Test4p5,Test4p6, Test4p7, Test4p8, Test4p1, Test4p2, Test4p3, Test4p4)
+numEp <- c(numEp5, numEp6, numEp7, numEp8, numEp1, numEp2, numEp3, numEp4)
+
+Table <- data.frame(cbind("v" = df, "Signifikans_niveau" = sig, "Dækkelse" = alpha, "Skalering" = gam, "Z2" = Test2p*100, "Z3" = Test3p*100, "Z4" = Test4p*100, "VaR1" = numEp*100))
+print(Table)
+```
+
+
+
+# Figur 6 og 7
+
+```{r}
+Z2_sim <- function(df0, df1) {
+  T <- 250
+  N <- 10^5
+  alpha <- 0.025
+  ES <- -integrate(function(q) qt(q, df0), 0, alpha)$value/alpha
+  VaR <- -qt(alpha,df0)
+  num <- T*alpha*ES
+  Z <- vector("numeric", N)
+  set.seed(4652374)
+  for (j in 1:N) {
+    Xt <- rt(T, df1)
+    Z[j] <- sum(Xt*(Xt + VaR < 0))/(num) + 1
+  }
+  return(Z)}
+
+Z3_sim <- function(df0, df1) {
+  T <- 250
+  N <- 10^5
+  alpha <- 0.025
+  integer <- floor(T*alpha)
+  Z <- vector("numeric", N)
+  set.seed(4652374)
+  for (j in 1:N){
+    lowestXt <- sort(rt(T, df1))[1:integer]
+    ESestimator <- -sum(lowestXt)/integer
+    integrale <- integrate(function(q) pbeta(1-q,T-integer,integer)*qt(q,df0), 0, 1)$value
+    EVanalytical <- -integrale*(T/integer)
+    
+    Z[j] <- -(ESestimator/EVanalytical)+1
+  }
+  return(Z)}
+
+Z4_sim <- function(df0, df1) {
+  T <- 250
+  N <- 10^5
+  alpha <- 0.025
+  ES <- -integrate(function(q) qt(q, df0), 0, alpha)$value/alpha
+  VaR <- -qt(alpha,df0)
+  num <- T*alpha*ES
+  Z <- vector("numeric", N)
+  set.seed(4652374)
+  for (j in 1:N) {
+    Xt <- rt(T, df1)
+    Z[j] <- sum((alpha*(-VaR)+(Xt+VaR)*(Xt + VaR < 0))/(num))+1
+  }
+  return(Z)}
+
+numExceedances_sim <- function(df0, df1){
+  T <- 250
+  N <- 10^5
+  beta <- 0.01
+  VaR <- -qt(beta,df0)
+  Exceedance <- vector("numeric", N)
+  set.seed(4652374)
+  for (j in 1:N){
+    Xt <- rt(T,df1)
+    Exceedance[j] <- -sum((Xt + VaR < 0))
+  }
+  return(Exceedance)}
+```
+
+
+## Figur 6 - Test 2
+
+```{r}
+# For Z2 med gamma = 1 og forskellige df'er
+f6Test2_H0 <- Z2_sim(100, 100)
+f6Test2_H1 <- Z2_sim(100, 10)
+f6Test2_H2 <- Z2_sim(100, 5)
+f6Test2_H3 <- Z2_sim(100, 3)
+
+# Plot CDF
+n <- 1000
+c0 <- ecdf(f6Test2_H0)
+c1 <- ecdf(f6Test2_H1)
+c2 <- ecdf(f6Test2_H2)
+c3 <- ecdf(f6Test2_H3)
+
+x <- seq(-6, 1, length.out = n)
+
+cdf_data <- data.frame(x = x, y = c(c0(x), 1 - c1(x), 1 - c2(x), 1 - c3(x)),
+                       df = rep(c("100", "10", "5", "3"), each = n))
+
+green5 <- quantile(f6Test2_H0, probs = 0.05)
+green10 <- quantile(f6Test2_H0, probs = 0.10)
+black5 <- quantile(f6Test2_H0, probs = 0.04174)
+black10 <- quantile(f6Test2_H0, probs = 0.10786)
+
+lines <- tibble(lines = c(green5, green10, black5, black10), group = c("green", "green", "black", "black"))
+
+cdf <- ggplot(cdf_data, aes(x = x, y = y, color = df)) +
+  geom_line(linewidth = 1) +geom_vline(data = lines, aes(xintercept = lines, color = group)) +
+  labs(title = "ES2.5% | Test2",x = "", y = "Fordeling", color = "Df") + scale_y_continuous(breaks = seq(0, 1, by = 0.1), minor_breaks = seq(0, 1, by = 0.1)) + scale_x_continuous(breaks = seq(-6, 1, by = 1), minor_breaks = seq(-6, 1, by = 1), limits = c(-6, 1)) + scale_color_manual(values = c("100" = "blue", "10" = "red", "5" = "#808000", "3" = "darkred", "green" = "green", "black" = "black")) +theme(legend.position = "none")
+
+# Plot PDF
+d0 <- density(f6Test2_H0, n = n)
+d1 <- density(f6Test2_H1, n = n)
+d2 <- density(f6Test2_H2, n = n)
+d3 <- density(f6Test2_H3, n = n)
+
+pdf_data <- data.frame(x = c(d0$x, d1$x, d2$x, d3$x), y = c(d0$y, d1$y, d2$y, d3$y),
+                       df = rep(c("100", "10", "5", "3"), each = n))
+
+pdf <- ggplot(pdf_data, aes(x = x, y = y, color = df)) +
+  geom_line(linewidth = 1) + labs(title = "", x = "", y = "Tæthed", color = "Df")  + scale_y_continuous(breaks = seq(0, 5, by = 1), minor_breaks = seq(0, 5, by = 1))  + scale_x_continuous(breaks = seq(-6, 1, by = 1), minor_breaks = seq(-6, 1, by = 1), limits = c(-6, 1)) + scale_color_manual(values = c("100" = "blue", "10" = "red", "5" = "#808000", "3" = "darkred")) +theme(legend.position = "none")
+
+# Power
+Test2p1 <- c1(quantile(f6Test2_H0, probs = 0.04174))
+Test2p2 <- c3(quantile(f6Test2_H0, probs = 0.04174))
+Test2p3 <- c1(quantile(f6Test2_H0, probs = 0.10786))
+Test2p4 <- c3(quantile(f6Test2_H0, probs = 0.10786))
+
+cdf / pdf + plot_layout(heights = c(2, 1))
+```
+
+
+## Figur 6 - Test 3
+
+```{r}
+# For Z3 med gamma = 1 og forskellige df'er
+f6Test3_H0 <- Z3_sim(100, 100)
+f6Test3_H1 <- Z3_sim(100, 10)
+f6Test3_H2 <- Z3_sim(100, 5)
+f6Test3_H3 <- Z3_sim(100, 3)
+
+# Plot CDF
+n <- 1000
+c0 <- ecdf(f6Test3_H0)
+c1 <- ecdf(f6Test3_H1)
+c2 <- ecdf(f6Test3_H2)
+c3 <- ecdf(f6Test3_H3)
+
+x <- seq(-3.2, 0.2, length.out = n)
+
+cdf_data <- data.frame(x = x, y = c(c0(x), 1 - c1(x), 1 - c2(x), 1 - c3(x)),
+                       df = rep(c("100", "10", "5", "3"), each = n))
+
+green5 <- quantile(f6Test3_H0, probs = 0.05)
+green10 <- quantile(f6Test3_H0, probs = 0.10)
+black5 <- quantile(f6Test3_H0, probs = 0.04174)
+black10 <- quantile(f6Test3_H0, probs = 0.10786)
+
+lines <- tibble(lines = c(green5, green10, black5, black10), group = c("green", "green", "black", "black"))
+
+cdf <- ggplot(cdf_data, aes(x = x, y = y, color = df)) +
+  geom_line(linewidth = 1) + geom_vline(data = lines, aes(xintercept = lines, color = group)) +
+  labs(title = "ES2.5% | Test3",x = "", y = "Fordeling", color = "Df") + scale_y_continuous(breaks = seq(0, 1, by = 0.1), minor_breaks = seq(0, 1, by = 0.1)) + scale_x_continuous(breaks = seq(-3, 0, by = 0.5), minor_breaks = seq(-3, 0, by = 0.5), limits = c(-3.2,0.2))+ scale_color_manual(values = c("100" = "blue", "10" = "red", "5" = "#808000", "3" = "darkred", "green" = "green", "black" = "black")) + theme(legend.position = "none")
+
+# Plot PDF
+d0 <- density(f6Test3_H0, n = n)
+d1 <- density(f6Test3_H1, n = n)
+d2 <- density(f6Test3_H2, n = n)
+d3 <- density(f6Test3_H3, n = n)
+
+pdf_data <- data.frame(x = c(d0$x, d1$x, d2$x, d3$x), y = c(d0$y, d1$y, d2$y, d3$y),
+                       df = rep(c("100", "10", "5", "3"), each = n))
+
+pdf <- ggplot(pdf_data, aes(x = x, y = y, color = df)) +
+  geom_line(linewidth = 1) + labs(title = "", x = "", y = "Tæthed", color = "Df") + 
+  scale_x_continuous(breaks = seq(-3, 0, by = 0.5), minor_breaks = seq(-3, 0, by = 0.5), limits = c(-3.2,0.2)) + scale_y_continuous(breaks = seq(0, 5, by = 1), minor_breaks = seq(0, 5, by = 1)) + scale_color_manual(values = c("100" = "blue", "10" = "red", "5" = "#808000", "3" = "darkred")) + theme(legend.position = "none")
+
+# Power
+Test3p1 <- c1(quantile(f6Test3_H0, probs = 0.04174))
+Test3p2 <- c3(quantile(f6Test3_H0, probs = 0.04174))
+Test3p3 <- c1(quantile(f6Test3_H0, probs = 0.10786))
+Test3p4 <- c3(quantile(f6Test3_H0, probs = 0.10786))
+
+cdf / pdf + plot_layout(heights = c(2, 1))
+```
+
+## 'Figur 6' - Test 4
+
+```{r}
+# For Z4 med gamma = 1 og forskellige df'er
+f6Test4_H0 <- Z4_sim(100, 100)
+f6Test4_H1 <- Z4_sim(100, 10)
+f6Test4_H2 <- Z4_sim(100, 5)
+f6Test4_H3 <- Z4_sim(100, 3)
+
+# Plot CDF
+n <- 1000
+c0 <- ecdf(f6Test4_H0)
+c1 <- ecdf(f6Test4_H1)
+c2 <- ecdf(f6Test4_H2)
+c3 <- ecdf(f6Test4_H3)
+
+x <- seq(-3.2, 0.2, length.out = n)
+
+cdf_data <- data.frame(x = x, y = c(c0(x), 1 - c1(x), 1 - c2(x), 1 - c3(x)),
+                       df = rep(c("100", "10", "5", "3"), each = n))
+
+green5 <- quantile(f6Test4_H0, probs = 0.05)
+green10 <- quantile(f6Test4_H0, probs = 0.10)
+black5 <- quantile(f6Test4_H0, probs = 0.04174)
+black10 <- quantile(f6Test4_H0, probs = 0.10786)
+
+lines <- tibble(lines = c(green5, green10, black5, black10), group = c("green", "green", "black", "black"))
+
+cdf <- ggplot(cdf_data, aes(x = x, y = y, color = df)) +
+  geom_line(linewidth = 1) + geom_vline(data = lines, aes(xintercept = lines, color = group)) +
+  labs(title = "ES2.5% | Test4",x = "", y = "Fordeling", color = "Df") + scale_y_continuous(breaks = seq(0, 1, by = 0.1), minor_breaks = seq(0, 1, by = 0.1)) + scale_x_continuous(breaks = seq(-3, 0, by = 0.5), minor_breaks = seq(-3, 0, by = 0.5), limits = c(-3.2, 0.2)) + scale_color_manual(values = c("100" = "blue", "10" = "red", "5" = "#808000", "3" = "darkred", "green" = "green", "black" = "black"))+theme(legend.position = "none")
+
+# Plot PDF
+d0 <- density(f6Test4_H0, n = n)
+d1 <- density(f6Test4_H1, n = n)
+d2 <- density(f6Test4_H2, n = n)
+d3 <- density(f6Test4_H3, n = n)
+
+pdf_data <- data.frame(x = c(d0$x, d1$x, d2$x, d3$x), y = c(d0$y, d1$y, d2$y, d3$y),
+                       df = rep(c("100", "10", "5", "3"), each = n))
+
+pdf <- ggplot(pdf_data, aes(x = x, y = y, color = df)) +
+  geom_line(linewidth = 1) + labs(title = "", x = "", y = "Tæthed", color = "Df") + scale_y_continuous(breaks = seq(0, 5, by = 1), minor_breaks = seq(0, 5, by = 1))  + 
+  scale_x_continuous(breaks = seq(-3, 0, by = 0.5), minor_breaks = seq(-3, 0, by = 0.5), limits = c(-3.2, 0.2) )  + scale_color_manual(values = c("100" = "blue", "10" = "red", "5" = "#808000", "3" = "darkred")) +theme(legend.position = "none")
+
+# Power
+Test4p1 <- c1(quantile(f6Test4_H0, probs = 0.04174)) # 
+Test4p2 <- c3(quantile(f6Test4_H0, probs = 0.04174)) # 
+Test4p3 <- c1(quantile(f6Test4_H0, probs = 0.10786)) # 
+Test4p4 <- c3(quantile(f6Test4_H0, probs = 0.10786)) 
+
+cdf / pdf + plot_layout(heights = c(2, 1))
+```
+
+## Figur 6 - numExceedances
+
+```{r}
+# For numExceedances med gamma = 1 og forskellige df'er 
+f6numExceedances_H0 <- numExceedances_sim(100, 100)
+f6numExceedances_H1 <- numExceedances_sim(100, 10)
+f6numExceedances_H2 <- numExceedances_sim(100, 5)
+f6numExceedances_H3 <- numExceedances_sim(100, 3)
+
+#sig-niveau
+f <- function(p) {
+  quantile(f6numExceedances_H0, probs = p)
+}
+p6_value <- seq(0.038, 0.05, length.out = 10000)
+f6_values <- sapply(p6_value, f)
+valid_p6 <- p6_value[f6_values == -6]
+p6 <- round(max(valid_p6), 6)
+p6
+
+p5_value <- seq(0.1035, 0.115, length.out = 10000)
+f5_values <- sapply(p5_value, f)
+valid_p5 <- p5_value[f5_values == -5]
+p5 <- round(max(valid_p5), 6)
+p5
+
+# Plot CDF
+n <- 1000
+c0 <- ecdf(f6numExceedances_H0)
+c1 <- ecdf(f6numExceedances_H1)
+c2 <- ecdf(f6numExceedances_H2)
+c3 <- ecdf(f6numExceedances_H3)
+
+x <- seq(-20, 0, length.out = n)
+
+cdf_data <- data.frame(x = x, y = c(c0(x), 1 - c1(x), 1 - c2(x), 1 - c3(x)),
+                       df = rep(c("100", "10", "5", "3"), each = n))
+
+black5 <- quantile(f6numExceedances_H0, probs = 0.04174)
+black10 <- quantile(f6numExceedances_H0, probs = 0.10786)
+
+lines <- tibble(lines = c(black5, black10), group = c( "black", "black"))
+
+cdf <- ggplot(cdf_data, aes(x = x, y = y, color = df)) +
+  geom_line(linewidth = 1) + geom_vline(data = lines, aes(xintercept = lines, color = group)) +
+  labs(title = "VaR1% | numExceedances",x = "", y = "Fordeling", color = "Df") + scale_y_continuous(breaks = seq(0, 1, by = 0.1), minor_breaks = seq(0, 1, by = 0.1)) + scale_x_continuous(breaks = seq(-20, 0, by = 5), minor_breaks = seq(-20, 0, by = 5), limits = c(-20.2, 0.2)) + scale_color_manual(values = c("100" = "blue", "10" = "red", "5" = "#808000", "3"="darkred", "black"= "black")) + theme(legend.position = "none")
+
+# Plot PDF
+d0 <- density(f6numExceedances_H0, n = n)
+d1 <- density(f6numExceedances_H1, n = n)
+d2 <- density(f6numExceedances_H2, n = n)
+d3 <- density(f6numExceedances_H3, n = n)
+
+pdf_data <- data.frame(x = c(d0$x, d1$x, d2$x, d3$x), y = c(d0$y, d1$y, d2$y, d3$y),
+                       df = rep(c("100", "10", "5", "3"), each = n))
+
+pdf <- ggplot(pdf_data, aes(x = x, y = y, color = df)) +
+  geom_line(linewidth = 1) + labs(title = "", x = "", y = "Tæthed", color = "Df") + scale_y_continuous(breaks = seq(0, 2, by = 0.5), minor_breaks = seq(0, 2, by = 0.5))  + 
+  scale_x_continuous(breaks = seq(-20, 0, by = 5), minor_breaks = seq(-20, 0, by = 5), limits = c(-20.2, 0.2))  + scale_color_manual(values = c("100" = "blue", "10" = "red", "5" = "#808000", "3" = "darkred")) + theme(legend.position = "none")  
+
+# Power
+numEp1 <- c1(quantile(f6numExceedances_H0, probs = 0.04174))
+numEp2 <- c3(quantile(f6numExceedances_H0, probs = 0.04174))
+numEp3 <- c1(quantile(f6numExceedances_H0, probs = 0.10786))
+numEp4 <- c3(quantile(f6numExceedances_H0, probs = 0.10786))
+
+cdf / pdf + plot_layout(heights = c(2, 1))
+```
+
+## Figur 7 - Test 2
+
+```{r}
+# For Z2 med gamma = 1 og forskellige df'er
+f7Test2_H0 <- Z2_sim(10, 10)
+f7Test2_H1 <- Z2_sim(10, 5)
+f7Test2_H2 <- Z2_sim(10, 3)
+
+# Plot CDF
+n <- 1000
+c0 <- ecdf(f7Test2_H0)
+c1 <- ecdf(f7Test2_H1)
+c2 <- ecdf(f7Test2_H2)
+
+x <- seq(-4.5, 1, length.out = n)
+
+cdf_data <- data.frame(x = x, y = c(c0(x), 1 - c1(x), 1 - c2(x)),
+                       df = rep(c("10", "5", "3"), each = n))
+
+green5 <- quantile(f7Test2_H0, probs = 0.05)
+green10 <- quantile(f7Test2_H0, probs = 0.10)
+black5 <- quantile(f7Test2_H0, probs = 0.04043)
+black10 <- quantile(f7Test2_H0, probs = 0.10682)
+
+lines <- tibble(lines = c(green5, green10, black5, black10), group = c("green", "green", "black", "black"))
+
+cdf <- ggplot(cdf_data, aes(x = x, y = y, color = df)) +
+  geom_line(linewidth = 1) + geom_vline(data = lines, aes(xintercept = lines, color = group)) +
+  labs(title = "ES2.5% | Test2",x = "", y = "Fordeling", color = "Df") + scale_y_continuous(breaks = seq(0, 1, by = 0.1), minor_breaks = seq(0, 1, by = 0.1)) + scale_x_continuous(breaks = seq(-4, 1, by = 1), minor_breaks = seq(-4, 1, by = 1), limits = c(-4.5,1) ) + scale_color_manual(values = c("10" = "blue", "5" = "red", "3" = "#808000", "green" = "green", "black" = "black"))+theme(legend.position = "none")
+
+# Plot PDF
+d0 <- density(f7Test2_H0, n = n)
+d1 <- density(f7Test2_H1, n = n)
+d2 <- density(f7Test2_H2, n = n)
+
+pdf_data <- data.frame(x = c(d0$x, d1$x, d2$x), y = c(d0$y, d1$y, d2$y),
+                       df = rep(c("10", "5", "3"), each = n))
+
+pdf <- ggplot(pdf_data, aes(x = x, y = y, color = df)) +
+  geom_line(linewidth = 1) + labs(title = "", x = "", y = "Tæthed", color = "Df") + scale_y_continuous(breaks = seq(0, 2, by = 0.5), minor_breaks = seq(0, 2, by = 0.5))  + 
+  scale_x_continuous(breaks = seq(-4, 1, by = 1), minor_breaks = seq(-4, 1, by = 1), limits = c(-4.5,1) ) + scale_color_manual(values = c("10" = "blue", "5" = "red", "3" = "#808000")) + theme(legend.position = "none")
+
+# Power
+Test2p5 <- c1(quantile(f7Test2_H0, probs = 0.04043))
+Test2p6 <- c2(quantile(f7Test2_H0, probs = 0.04043))
+Test2p7 <- c1(quantile(f7Test2_H0, probs = 0.10682))
+Test2p8 <- c2(quantile(f7Test2_H0, probs = 0.10682))
+
+cdf / pdf + plot_layout(heights = c(2, 1))
+```
+
+## Figur 7 - Test 2 (POWER ILLUSTRATION)
+
+```{r}
+# Plot CDF
+cdf_data <- data.frame(x = x, y = c(c0(x), 1 - c1(x)),
+                       df = rep(c("10", "5"), each = n))
+
+green5 <- quantile(f7Test2_H0, probs = 0.05)
+
+lines <- tibble(lines = c(green5), group = c("green"))
+dashed_lines <- tibble(lines = c(green5), group = c("green_dashed"))
+
+lines <- tibble(lines = c(green5), group = c("green"))
+
+cdf <- ggplot(cdf_data, aes(x = x, y = y, color = df)) +
+  geom_line(linewidth = 1) + 
+  geom_segment(data = lines, aes(x = lines, xend = lines, y = 0, yend = 1, color = group), linewidth = 1) + geom_segment(data = lines, aes(x = -4.5, xend = lines, y = 0.05, yend = 0.05, color = group), linewidth = 1) + labs(title = "",x = "", y = "Fordelingsfunktion", color = "Df") + scale_y_continuous(breaks = seq(0, 1, by = 0.1), minor_breaks = seq(0, 1, by = 0.1)) + scale_x_continuous(breaks = seq(-4, 0, by = 1), minor_breaks = seq(-4, 0, by = 1) ) + scale_color_manual(values = c("10" = "blue", "5" = "red", "green" = "green"))+theme(legend.position = "none") 
+
+# Plot PDF
+pdf_crit <- pdf_data %>% filter(df == "10", x <= green5)
+
+pdf_power <- pdf_data %>% filter(df == "5", x <= green5)
+
+pdf_data <- data.frame(x = c(d0$x, d1$x), y = c(d0$y, d1$y),
+                       df = rep(c("10", "5"), each = n))
+
+pdf <- ggplot(pdf_data, aes(x = x, y = y, color = df)) +
+  geom_line(linewidth = 1) + geom_segment(data = lines, aes(x = lines, xend = lines, y = 0, yend = 1, color = group), linewidth = 1) +
+  labs(title = "", x = "", y = "Tæthed", color = "Df") + scale_y_continuous(breaks = seq(0, 4, by = 0.5), minor_breaks = seq(0, 4, by = 0.5)) + geom_area(data = pdf_crit, aes(x = x, y = y), 
+            fill = "lightcoral", alpha = 0.3) +
+  geom_area(data = pdf_power, aes(x = x, y = y), 
+            fill = "lightcoral", alpha = 0.3) + scale_x_continuous(breaks = seq(-4, 0, by = 1), minor_breaks = seq(-4, 0, by = 1), limits = c(-4.5, 1) ) + scale_color_manual(values = c("10" = "blue", "5" = "red", "green" = "green")) +
+  theme(legend.position = "none")
+
+cdf / pdf + plot_layout(heights = c(2, 1))
+```
+
+## Figur 7 - Test 3
+
+```{r}
+# For Z3 med gamma = 1 og forskellige df'er
+f7Test3_H0 <- Z3_sim(10, 10)
+f7Test3_H1 <- Z3_sim(10, 5)
+f7Test3_H2 <- Z3_sim(10, 3)
+
+# Plot CDF
+n <- 1000
+c0 <- ecdf(f7Test3_H0)
+c1 <- ecdf(f7Test3_H1)
+c2 <- ecdf(f7Test3_H2)
+
+x <- seq(-2.5, 0.3, length.out = n)
+
+cdf_data <- data.frame(x = x, y = c(c0(x), 1 - c1(x), 1 - c2(x)),
+                       df = rep(c("10", "5", "3"), each = n))
+
+green5 <- quantile(f7Test3_H0, probs = 0.05)
+green10 <- quantile(f7Test3_H0, probs = 0.10)
+black5 <- quantile(f7Test3_H0, probs = 0.04043)
+black10 <- quantile(f7Test3_H0, probs = 0.10682)
+
+lines <- tibble(lines = c(green5, green10, black5, black10), group = c("green", "green", "black", "black"))
+
+cdf <- ggplot(cdf_data, aes(x = x, y = y, color = df)) +
+  geom_line(linewidth = 1) + geom_vline(data = lines, aes(xintercept = lines, color = group)) +
+  labs(title = "ES2.5% | Test3",x = "", y = "Fordeling", color = "Df") + scale_y_continuous(breaks = seq(0, 1, by = 0.1), minor_breaks = seq(0, 1, by = 0.1)) + scale_x_continuous(breaks = seq(-2.5, 0, by = 0.5), minor_breaks = seq(-2.5, 0, by = 0.5), limits = c(-2.5, 0.3)) + scale_color_manual(values = c("10" = "blue", "5" = "red", "3" = "#808000", "green" = "green", "black" = "black"))+theme(legend.position = "none")
+
+# Plot PDF
+d0 <- density(f7Test3_H0, n = n)
+d1 <- density(f7Test3_H1, n = n)
+d2 <- density(f7Test3_H2, n = n)
+
+pdf_data <- data.frame(x = c(d0$x, d1$x, d2$x), y = c(d0$y, d1$y, d2$y),
+                       df = rep(c("10", "5", "3"), each = n))
+
+pdf <- ggplot(pdf_data, aes(x = x, y = y, color = df)) +
+  geom_line(linewidth = 1) + labs(title = "", x = "", y = "Tæthed", color = "Df") + scale_y_continuous(breaks = seq(0, 5, by = 1), minor_breaks = seq(0, 5, by = 1))  + 
+  scale_x_continuous(breaks = seq(-2.5, 0, by = 0.5), minor_breaks = seq(-2.5, 0, by = 0.5), limits = c(-2.5, 0.3)) + scale_color_manual(values = c("10" = "blue", "5" = "red", "3" = "#808000")) +
+  theme(legend.position = "none") 
+
+# Power
+Test3p5 <- c1(quantile(f7Test3_H0, probs = 0.04043))
+Test3p6 <- c2(quantile(f7Test3_H0, probs = 0.04043))
+Test3p7 <- c1(quantile(f7Test3_H0, probs = 0.10682))
+Test3p8 <- c2(quantile(f7Test3_H0, probs = 0.10682))
+
+cdf / pdf + plot_layout(heights = c(2, 1))
+```
+
+## 'Figur 7' - Test 4
+
+```{r}
+# For Z4 med gamma = 1 og forskellige df'er
+f7Test4_H0 <- Z4_sim(10, 10)
+f7Test4_H1 <- Z4_sim(10, 5)
+f7Test4_H2 <- Z4_sim(10, 3)
+
+# Plot CDF
+n <- 1000
+c0 <- ecdf(f7Test4_H0)
+c1 <- ecdf(f7Test4_H1)
+c2 <- ecdf(f7Test4_H2)
+
+x <- seq(-2.5, 0.2, length.out = n)
+
+cdf_data <- data.frame(x = x, y = c(c0(x), 1 - c1(x), 1 - c2(x)),
+                       df = rep(c("10", "5", "3"), each = n))
+
+green5 <- quantile(f7Test4_H0, probs = 0.05)
+green10 <- quantile(f7Test4_H0, probs = 0.10)
+black5 <- quantile(f7Test4_H0, probs = 0.04043)
+black10 <- quantile(f7Test4_H0, probs = 0.10682)
+
+lines <- tibble(lines = c(green5, green10, black5, black10), group = c("green", "green", "black", "black"))
+
+cdf <- ggplot(cdf_data, aes(x = x, y = y, color = df)) +
+  geom_line(linewidth = 1) +geom_vline(data = lines, aes(xintercept = lines, color = group)) +
+  labs(title = "ES2.5% | Test4",x = "", y = "Fordeling", color = "Df") + scale_y_continuous(breaks = seq(0, 1, by = 0.1), minor_breaks = seq(0, 1, by = 0.1)) + scale_x_continuous(breaks = seq(-2.5, 0, by = 0.5), minor_breaks = seq(-2.5, 0, by = 0.5), limits = c(-2.5, 0.2) ) + scale_color_manual(values = c("10" = "blue", "5" = "red", "3" = "#808000", "green" = "green", "black" = "black"))+theme(legend.position = "none")
+
+# Plot PDF
+d0 <- density(f7Test4_H0, n = n)
+d1 <- density(f7Test4_H1, n = n)
+d2 <- density(f7Test4_H2, n = n)
+
+pdf_data <- data.frame(x = c(d0$x, d1$x, d2$x), y = c(d0$y, d1$y, d2$y),
+                       df = rep(c("10", "5", "3"), each = n))
+
+pdf <- ggplot(pdf_data, aes(x = x, y = y, color = df)) +
+  geom_line(linewidth = 1) + labs(title = "", x = "", y = "Tæthed", color = "Df") + scale_y_continuous(breaks = seq(0, 5, by = 1), minor_breaks = seq(0, 5, by = 1)) + scale_x_continuous(breaks = seq(-2.5, 0, by = 0.5), minor_breaks = seq(-2.5, 0, by = 0.5), limits = c(-2.5, 0.2) ) + scale_color_manual(values = c("10" = "blue", "5" = "red", "3" = "#808000")) + theme(legend.position = "none")
+
+# Power
+Test4p5 <- c1(quantile(f7Test4_H0, probs = 0.04043))
+Test4p6 <- c2(quantile(f7Test4_H0, probs = 0.04043))
+Test4p7 <- c1(quantile(f7Test4_H0, probs = 0.10682))
+Test4p8 <- c2(quantile(f7Test4_H0, probs = 0.10682))
+
+cdf / pdf + plot_layout(heights = c(2, 1))
+```
+
+## Figur 7 - numExceedances
+
+```{r}
+# For numExceedances med gamma = 1 og forskellige df'er 
+f7numExceedances_H0 <- numExceedances_sim(10, 10)
+f7numExceedances_H1 <- numExceedances_sim(10, 5)
+f7numExceedances_H2 <- numExceedances_sim(10, 3)
+
+#sig-niveau
+f <- function(p) {
+  quantile(f7numExceedances_H0, probs = p)
+}
+p6_value <- seq(0.038, 0.05, length.out = 10000)
+f6_values <- sapply(p6_value, f)
+valid_p6 <- p6_value[f6_values == -6]
+p6 <- round(max(valid_p6), 6)
+p6
+
+p5_value <- seq(0.1035, 0.115, length.out = 10000)
+f5_values <- sapply(p5_value, f)
+valid_p5 <- p5_value[f5_values == -5]
+p5 <- round(max(valid_p5), 6)
+p5
+
+
+# Plot CDF
+n <- 1000
+c0 <- ecdf(f7numExceedances_H0)
+c1 <- ecdf(f7numExceedances_H1)
+c2 <- ecdf(f7numExceedances_H2)
+
+x <- seq(-16, 0, length.out = n)
+
+cdf_data <- data.frame(x = x, y = c(c0(x), 1 - c1(x), 1 - c2(x)),
+                       df = rep(c("10", "5", "3"), each = n))
+
+black5 <- quantile(f7numExceedances_H0, probs = 0.04043)
+black10 <- quantile(f7numExceedances_H0, probs = 0.10682)
+
+lines <- tibble(lines = c(black5, black10), group = c( "black", "black"))
+
+cdf <- ggplot(cdf_data, aes(x = x, y = y, color = df)) +
+  geom_line(linewidth = 1) + geom_vline(data = lines, aes(xintercept = lines, color = group)) +
+  labs(title = "VaR1% | numExceedances",x = "", y = "Fordeling", color = "Df") + scale_y_continuous(breaks = seq(0, 1, by = 0.1), minor_breaks = seq(0, 1, by = 0.1)) + scale_x_continuous(breaks = seq(-16, 0, by = 2), minor_breaks = seq(-16, 0, by = 2), limits = c(-16,0)) + scale_color_manual(values = c("10" = "blue", "5" = "red", "3" = "#808000", "black" = "black"))+theme(legend.position = "none")
+
+# Plot PDF
+d0 <- density(f7numExceedances_H0, n = n)
+d1 <- density(f7numExceedances_H1, n = n)
+d2 <- density(f7numExceedances_H2, n = n)
+
+pdf_data <- data.frame(x = c(d0$x, d1$x, d2$x), y = c(d0$y, d1$y, d2$y),
+                       df = rep(c("10", "5", "3"), each = n))
+
+pdf <- ggplot(pdf_data, aes(x = x, y = y, color = df)) +
+  geom_line(linewidth = 1) +labs(title = "", x = "", y = "Tæthed", color = "Df") + scale_y_continuous(breaks = seq(0, 2, by = 0.5), minor_breaks = seq(0, 2, by = 0.5)) + scale_x_continuous(breaks = seq(-16, 0, by = 2), minor_breaks = seq(-16, 0, by = 2), limits = c(-16,0)) + scale_color_manual(values = c("10" = "blue", "5" = "red", "3" = "#808000"))   + theme(legend.position = "none")
+
+# Power
+numEp5 <- c1(quantile(f7numExceedances_H0, probs = 0.04043))
+numEp6 <- c2(quantile(f7numExceedances_H0, probs = 0.04043))
+numEp7 <- c1(quantile(f7numExceedances_H0, probs = 0.10682))
+numEp8 <- c2(quantile(f7numExceedances_H0, probs = 0.10682))
+
+cdf / pdf + plot_layout(heights = c(2, 1))
+```
+
+## Øvre del af Tabel 2
+
+```{r}
+sig <- c(rep(4,2), rep(10.6,2), rep(4.1,2), rep(10.4,2))
+df0 <- c(rep(10,4), rep(100,4))
+df1 <- c(rep(c(5,3),2), rep(c(10,3),2))
+
+Test2p <- c(Test2p5,Test2p6, Test2p7, Test2p8, Test2p1, Test2p2, Test2p3, Test2p4)
+Test3p <- c(Test3p5,Test3p6, Test3p7, Test3p8, Test3p1, Test3p2, Test3p3, Test3p4)
+Test4p <- c(Test4p5,Test4p6, Test4p7, Test4p8, Test4p1, Test4p2, Test4p3, Test4p4)
+numEp <- c(numEp5, numEp6, numEp7, numEp8, numEp1, numEp2, numEp3, numEp4)
+
+Table <- data.frame(cbind("v_H0" = df0, "Signifikans_niveau" = sig, "v_H1" = df1, "Z2" = Test2p*100, "Z3" = Test3p*100, "Z4" = Test4p*100,  "VaR1" = numEp*100))
+print(Table)
+```
+
+
+# Figur 9 og 10
+
+```{r}
+Z2_sim <- function(df0, df1) {
+  T <- 250
+  N <- 10^5
+  alpha <- 0.025
+  ES <- -integrate(function(q) qstd(q, 0, 1, df0), 0, alpha)$value/alpha
+  VaR <- -qstd(alpha, 0, 1, df0)
+  num <- T*alpha*ES
+  Z <- vector("numeric", N)
+  set.seed(4652374)
+  for (j in 1:N) {
+    Xt <- rstd(T, 0, 1, df1)
+    Z[j] <- sum(Xt*(Xt +VaR < 0))/(num) + 1
+  }
+  return(Z)}
+
+Z3_sim <- function(df0,df1) {
+  T <- 250
+  N <- 10^5
+  alpha <- 0.025
+  integer <- floor(T*alpha)
+  Z <- vector("numeric", N)
+  set.seed(4652374)
+  for (j in 1:N){
+    lowestXt <- sort(rstd(T,0,1, df1))[1:integer]
+    ESestimator <- -sum(lowestXt)/integer
+    integrale <- integrate(function(q) pbeta(1-q,T-integer,integer)*qstd(q,0,1, df0), 0, 1)$value
+    EVanalytical <- -integrale*(T/integer)
+    
+    Z[j] <- -(ESestimator/EVanalytical)+1
+  }
+  return(Z)}
+
+Z4_sim <- function(df0, df1) {
+  T <- 250
+  N <- 10^5
+  alpha <- 0.025
+  ES <- -integrate(function(q) qstd(q, 0, 1, df0), 0, alpha)$value/alpha
+  VaR <- -qstd(alpha, 0, 1, df0)
+  num <- T*alpha*ES
+  Z <- vector("numeric", N)
+  set.seed(4652374)
+  for (j in 1:N) {
+    Xt <- rstd(T, 0, 1, df1)
+    Z[j] <- sum((alpha*(-VaR)+(Xt+VaR)*(Xt + VaR < 0))/(num)) + 1
+  }
+  return(Z)}
+
+numExceedances_sim <- function(df0, df1){
+  T <- 250
+  N <- 10^5
+  beta <- 0.01
+  VaR <- -qstd(beta, 0, 1, df0)
+  Exceedance <- vector("numeric", N)
+  set.seed(4652374)
+  for (j in 1:N){
+    Xt <- rstd(T, 0, 1, df1)
+    Exceedance[j] <- -sum((Xt + VaR < 0))
+  }
+  return(Exceedance)}
+```
+
+# Figur 9 - Test 2
+
+```{r}
+# For Z2 med standardiseret t-fordeling for gamma = 1 og forskellige df'er
+f9Test2_H0 <- Z2_sim(100, 100)
+f9Test2_H1 <- Z2_sim(100, 10)
+f9Test2_H2 <- Z2_sim(100, 5)
+f9Test2_H3 <- Z2_sim(100, 3)
+
+# Plot CDF
+n <- 1000
+c0 <- ecdf(f9Test2_H0)
+c1 <- ecdf(f9Test2_H1)
+c2 <- ecdf(f9Test2_H2)
+c3 <- ecdf(f9Test2_H3)
+
+x <- seq(-1.8, 0.8, length.out = n)
+
+cdf_data <- data.frame(x = x, y = c(c0(x), 1 - c1(x), 1 - c2(x), 1 - c3(x)),
+                       df = rep(c("100", "10", "5", "3"), each = n))
+
+green5 <- quantile(f9Test2_H0, probs = 0.05)
+green10 <- quantile(f9Test2_H0, probs = 0.10)
+black5 <- quantile(f9Test2_H0, probs = 0.04174)
+black10 <- quantile(f9Test2_H0, probs = 0.10786)
+
+lines <- tibble(lines = c(green5, green10, black5, black10), group = c("green", "green", "black", "black"))
+
+cdf <- ggplot(cdf_data, aes(x = x, y = y, color = df)) +
+  geom_line(linewidth = 1) + geom_vline(data = lines, aes(xintercept = lines, color = group)) +
+  labs(title = "ES2.5% | Test2",x = "", y = "Fordeling", color = "Df") + scale_y_continuous(breaks = seq(0, 1, by = 0.1), minor_breaks = seq(0, 1, by = 0.1)) + scale_x_continuous(breaks = seq(-1.5, 0.5, by = 0.5), minor_breaks = seq(-1.5, 0.5, by = 0.5), limits = c(-1.8,0.8) ) + scale_color_manual(values = c("100" = "blue", "10" = "red", "5" = "#808000", "3" = "darkred", "green" = "green", "black" = "black"))+theme(legend.position = "none")
+
+# Plot PDF
+d0 <- density(f9Test2_H0, n = n)
+d1 <- density(f9Test2_H1, n = n)
+d2 <- density(f9Test2_H2, n = n)
+d3 <- density(f9Test2_H3, n = n)
+
+pdf_data <- data.frame(x = c(d0$x, d1$x, d2$x, d3$x), y = c(d0$y, d1$y, d2$y, d3$y),
+                       df = rep(c("100", "10", "5", "3"), each = n))
+
+pdf <- ggplot(pdf_data, aes(x = x, y = y, color = df)) +
+  geom_line(linewidth = 1) + labs(title = "", x = "", y = "Tæthed", color = "Df") + scale_y_continuous(breaks = seq(0, 5, by = 0.5), minor_breaks = seq(0, 5, by = 0.5)) + scale_x_continuous(breaks = seq(-1.5, 0.5, by = 0.5), minor_breaks = seq(-1.5, 0.5, by = 0.5), limits = c(-1.8,0.8) ) + scale_color_manual(values = c("100" = "blue", "10" = "red", "5" = "#808000", "3" = "darkred")) +theme(legend.position = "none")
+
+# Power
+Test2p1 <- c1(quantile(f9Test2_H0, probs = 0.04174))
+Test2p2 <- c3(quantile(f9Test2_H0, probs = 0.04174))
+Test2p3 <- c1(quantile(f9Test2_H0, probs = 0.10786))
+Test2p4 <- c3(quantile(f9Test2_H0, probs = 0.10786))
+
+cdf / pdf + plot_layout(heights = c(2, 1))
+```
+
+# Figur 9 - Test 3
+
+```{r}
+# For Z3 med standardiseret t-fordeling for gamma = 1 og forskellige df'er
+f9Test3_H0 <- Z3_sim(100, 100)
+f9Test3_H1 <- Z3_sim(100, 10)
+f9Test3_H2 <- Z3_sim(100, 5)
+f9Test3_H3 <- Z3_sim(100, 3)
+
+# Plot CDF
+n <- 1000
+c0 <- ecdf(f9Test3_H0)
+c1 <- ecdf(f9Test3_H1)
+c2 <- ecdf(f9Test3_H2)
+c3 <- ecdf(f9Test3_H3)
+
+x <- seq(-1.5, 0.3, length.out = n)
+
+cdf_data <- data.frame(x = x, y = c(c0(x), 1 - c1(x), 1 - c2(x), 1 - c3(x)),
+                       df = rep(c("100", "10", "5", "3"), each = n))
+
+green5 <- quantile(f9Test3_H0, probs = 0.05)
+green10 <- quantile(f9Test3_H0, probs = 0.10)
+black5 <- quantile(f9Test3_H0, probs = 0.04174)
+black10 <- quantile(f9Test3_H0, probs = 0.10786)
+
+lines <- tibble(lines = c(green5, green10, black5, black10), group = c("green", "green", "black", "black"))
+
+cdf <- ggplot(cdf_data, aes(x = x, y = y, color = df)) +
+  geom_line(linewidth = 1) + geom_vline(data = lines, aes(xintercept = lines, color = group))+
+  labs(title = "ES2.5% | Test3",x = "", y = "Fordeling", color = "Df") + scale_y_continuous(breaks = seq(0, 1, by = 0.1), minor_breaks = seq(0, 1, by = 0.1)) + scale_x_continuous(breaks = seq(-1.4, 0.2, by = 0.2), minor_breaks = seq(-1.4, 0.2, by = 0.2),label = scales::label_number(accuracy = 0.1), limits = c(-1.5,0.3)) + scale_color_manual(values = c("100" = "blue", "10" = "red", "5" = "#808000", "3" = "darkred", "green" = "green", "black" = "black"))+theme(legend.position = "none")
+
+# Plot PDF
+d0 <- density(f9Test3_H0, n = n)
+d1 <- density(f9Test3_H1, n = n)
+d2 <- density(f9Test3_H2, n = n)
+d3 <- density(f9Test3_H3, n = n)
+
+pdf_data <- data.frame(x = c(d0$x, d1$x, d2$x, d3$x), y = c(d0$y, d1$y, d2$y, d3$y),
+                       df = rep(c("100", "10", "5", "3"), each = n))
+
+pdf <- ggplot(pdf_data, aes(x = x, y = y, color = df)) +
+  geom_line(linewidth = 1) + labs(title = "", x = "", y = "Tæthed", color = "Df") + scale_y_continuous(breaks = seq(0, 6, by = 1), minor_breaks = seq(0, 6, by = 1)) + scale_x_continuous(breaks = seq(-1.4, 0.2, by = 0.2), minor_breaks = seq(-1.4, 0.2, by = 0.2), label = scales::label_number(accuracy = 0.1), limits = c(-1.5,0.3)) + scale_color_manual(values = c("100" = "blue", "10" = "red", "5" = "#808000", "3" = "darkred")) +theme(legend.position = "none")
+
+# Power
+Test3p1 <- c1(quantile(f9Test3_H0, probs = 0.04174))
+Test3p2 <- c3(quantile(f9Test3_H0, probs = 0.04174))
+Test3p3 <- c1(quantile(f9Test3_H0, probs = 0.10786))
+Test3p4 <- c3(quantile(f9Test3_H0, probs = 0.10786))
+
+cdf / pdf + plot_layout(heights = c(2, 1))
+```
+
+# 'Figur 9' - Test 4
+
+```{r}
+# For Z4 med standardiseret t-fordeling for gamma = 1 og forskellige df'er
+f9Test4_H0 <- Z4_sim(100, 100)
+f9Test4_H1 <- Z4_sim(100, 10)
+f9Test4_H2 <- Z4_sim(100, 5)
+f9Test4_H3 <- Z4_sim(100, 3)
+
+# Plot CDF
+n <- 1000
+c0 <- ecdf(f9Test4_H0)
+c1 <- ecdf(f9Test4_H1)
+c2 <- ecdf(f9Test4_H2)
+c3 <- ecdf(f9Test4_H3)
+
+x <- seq(-1.4, 0.2, length.out = n)
+
+cdf_data <- data.frame(x = x, y = c(c0(x), 1 - c1(x), 1 - c2(x), 1 - c3(x)),
+                       df = rep(c("100", "10", "5", "3"), each = n))
+
+green5 <- quantile(f9Test4_H0, probs = 0.05)
+green10 <- quantile(f9Test4_H0, probs = 0.10)
+black5 <- quantile(f9Test4_H0, probs = 0.04174)
+black10 <- quantile(f9Test4_H0, probs = 0.10786)
+
+lines <- tibble(lines = c(green5, green10, black5, black10), group = c("green", "green", "black", "black"))
+
+cdf <- ggplot(cdf_data, aes(x = x, y = y, color = df)) +
+  geom_line(linewidth = 1) + geom_vline(data = lines, aes(xintercept = lines, color = group))+
+  labs(title = "ES2.5% | Test4",x = "", y = "Fordeling", color = "Df") + scale_y_continuous(breaks = seq(0, 1, by = 0.1), minor_breaks = seq(0, 1, by = 0.1)) + scale_x_continuous(breaks = seq(-1.4, 0.2, by = 0.2), minor_breaks = seq(-1.4, 0.2, by = 0.2),label = scales::label_number(accuracy = 0.1), limits = c(-1.4, 0.2)) + scale_color_manual(values = c("100" = "blue", "10" = "red", "5" = "#808000", "3" = "darkred", "green" = "green", "black" = "black"))+theme(legend.position = "none")
+
+# Plot PDF
+d0 <- density(f9Test4_H0, n = n)
+d1 <- density(f9Test4_H1, n = n)
+d2 <- density(f9Test4_H2, n = n)
+d3 <- density(f9Test4_H3, n = n)
+
+pdf_data <- data.frame(x = c(d0$x, d1$x, d2$x, d3$x), y = c(d0$y, d1$y, d2$y, d3$y),
+                       df = rep(c("100", "10", "5", "3"), each = n))
+
+pdf <- ggplot(pdf_data, aes(x = x, y = y, color = df)) +
+  geom_line(linewidth = 1) + labs(title = "", x = "", y = "Tæthed", color = "Df") + scale_y_continuous(breaks = seq(0, 5, by = 1), minor_breaks = seq(0, 5, by = 1)) + scale_x_continuous(breaks = seq(-1.4, 0.2, by = 0.2), minor_breaks = seq(-1.4, 0.2, by = 0.2),label = scales::label_number(accuracy = 0.1), limits = c(-1.4, 0.2)) + scale_color_manual(values = c("100" = "blue", "10" = "red", "5" = "#808000", "3" = "darkred")) +theme(legend.position = "none")
+
+# Power
+Test4p1 <- c1(quantile(f9Test4_H0, probs = 0.04174)) # 
+Test4p2 <- c3(quantile(f9Test4_H0, probs = 0.04174)) # 
+Test4p3 <- c1(quantile(f9Test4_H0, probs = 0.10786)) # 
+Test4p4 <- c3(quantile(f9Test4_H0, probs = 0.10786)) # 
+
+cdf / pdf + plot_layout(heights = c(2, 1))
+```
+
+## Figur 9 - numExceedances
+
+```{r}
+# For numExceedances med standardiseret t-fordeling for gamma = 1 og forskellige df'er
+f9numExceedances_H0 <- numExceedances_sim(100, 100)
+f9numExceedances_H1 <- numExceedances_sim(100, 10)
+f9numExceedances_H2 <- numExceedances_sim(100, 5)
+f9numExceedances_H3 <- numExceedances_sim(100, 3)
+
+#sig-niveau
+f <- function(p) {
+  quantile(f9numExceedances_H0, probs = p)
+}
+p6_value <- seq(0.038, 0.05, length.out = 10000)
+f6_values <- sapply(p6_value, f)
+valid_p6 <- p6_value[f6_values == -6]
+p6 <- round(max(valid_p6), 6)
+p6
+
+p5_value <- seq(0.1035, 0.115, length.out = 10000)
+f5_values <- sapply(p5_value, f)
+valid_p5 <- p5_value[f5_values == -5]
+p5 <- round(max(valid_p5), 6)
+p5
+
+# Plot CDF
+n <- 1000
+c0 <- ecdf(f9numExceedances_H0)
+c1 <- ecdf(f9numExceedances_H1)
+c2 <- ecdf(f9numExceedances_H2)
+c3 <- ecdf(f9numExceedances_H3)
+
+x <- seq(-9, 0, length.out = n)
+
+cdf_data <- data.frame(x = x, y = c(c0(x), 1 - c1(x), 1 - c2(x), 1 - c3(x)),
+                       df = rep(c("100", "10", "5", "3"), each = n))
+
+black5 <- quantile(f9numExceedances_H0, probs =0.04174)
+black10 <- quantile(f9numExceedances_H0, probs =0.10786)
+
+lines <- tibble(lines = c(black5, black10), group = c("black", "black"))
+
+cdf <- ggplot(cdf_data, aes(x = x, y = y, color = df)) +
+  geom_line(linewidth = 1) + geom_vline(data = lines, aes(xintercept = lines, color = group))+
+  labs(title = "VaR1% | numExceedances",x = "", y = "Fordeling", color = "Df") + scale_y_continuous(breaks = seq(0, 1, by = 0.1), minor_breaks = seq(0, 1, by = 0.1)) + scale_x_continuous(breaks = seq(-9, 0, by = 1), minor_breaks = seq(-9, 0, by = 1), limits = c(-9, 0)) + scale_color_manual(values = c("100" = "blue", "10" = "red", "5" = "#808000", "3"="darkred", "black" = "black"))+theme(legend.position = "none")
+
+# Plot PDF
+d0 <- density(f9numExceedances_H0, n = n)
+d1 <- density(f9numExceedances_H1, n = n)
+d2 <- density(f9numExceedances_H2, n = n)
+d3 <- density(f9numExceedances_H3, n = n)
+
+pdf_data <- data.frame(x = c(d0$x, d1$x, d2$x, d3$x), y = c(d0$y, d1$y, d2$y, d3$y),
+                       df = rep(c("100", "10", "5", "3"), each = n))
+
+pdf <- ggplot(pdf_data, aes(x = x, y = y, color = df)) +
+  geom_line(linewidth = 1) + labs(title = "", x = "", y = "Tæthed", color = "Df") + scale_y_continuous(breaks = seq(0, 5, by = 0.5), minor_breaks = seq(0, 5, by = 0.5)) + scale_x_continuous(breaks = seq(-9, 0, by = 1), minor_breaks = seq(-9, 0, by = 1), limits = c(-9, 0))+ scale_color_manual(values = c("100" = "blue", "10" = "red", "5" = "#808000", "3" = "darkred")) + theme(legend.position = "none") 
+
+# Power 
+numEp1 <- c1(quantile(f9numExceedances_H0, probs =0.04174))
+numEp2 <- c3(quantile(f9numExceedances_H0, probs =0.04174))
+numEp3 <- c1(quantile(f9numExceedances_H0, probs =0.10786))
+numEp4 <- c3(quantile(f9numExceedances_H0, probs =0.10786))
+
+cdf / pdf + plot_layout(heights = c(2, 1))
+```
+
+# Figur 10 - Test 2
+
+```{r}
+# For Z2 med standardiseret t-fordeling for gamma = 1 og forskellige df'er
+f10Test2_H0 <- Z2_sim(10, 10)
+f10Test2_H1 <- Z2_sim(10, 5)
+f10Test2_H2 <- Z2_sim(10, 3)
+
+# Plot CDF
+n <- 1000
+c0 <- ecdf(f10Test2_H0)
+c1 <- ecdf(f10Test2_H1)
+c2 <- ecdf(f10Test2_H2)
+
+x <- seq(-1.6, 0.8, length.out = n)
+
+cdf_data <- data.frame(x = x, y = c(c0(x), 1 - c1(x), 1 - c2(x)),
+                       df = rep(c("10", "5", "3"), each = n))
+
+green5 <- quantile(f10Test2_H0, probs = 0.05)
+green10 <- quantile(f10Test2_H0, probs = 0.10)
+black5 <- quantile(f10Test2_H0, probs = 0.04043)
+black10 <- quantile(f10Test2_H0, probs = 0.10682)
+
+lines <- tibble(lines = c(green5, green10, black5, black10), group = c("green", "green", "black", "black"))
+
+
+cdf <- ggplot(cdf_data, aes(x = x, y = y, color = df)) +
+  geom_line(linewidth = 1) + geom_vline(data = lines, aes(xintercept = lines, color = group))+
+  labs(title = "ES2.5% | Test2",x = "", y = "Fordeling", color = "Df") + scale_y_continuous(breaks = seq(0, 1, by = 0.1), minor_breaks = seq(0, 1, by = 0.1)) + scale_x_continuous(breaks = seq(-1.5, 0.5, by = 0.5), minor_breaks = seq(-1.5, 0.5, by = 0.5), limits = c(-1.6,0.8) ) + scale_color_manual(values = c("10" = "blue", "5" = "red", "3" = "#808000", "green" = "green", "black" = "black"))+theme(legend.position = "none")
+
+# Plot PDF
+d0 <- density(f10Test2_H0, n = n)
+d1 <- density(f10Test2_H1, n = n)
+d2 <- density(f10Test2_H2, n = n)
+
+pdf_data <- data.frame(x = c(d0$x, d1$x, d2$x), y = c(d0$y, d1$y, d2$y),
+                       df = rep(c("10", "5", "3"), each = n))
+
+pdf <- ggplot(pdf_data, aes(x = x, y = y, color = df)) +
+  geom_line(linewidth = 1) + labs(title = "", x = "", y = "Tæthed", color = "Df") + scale_y_continuous(breaks = seq(0, 1, by = 0.5), minor_breaks = seq(0, 1, by = 0.5)) + scale_x_continuous(breaks = seq(-1.5, 0.5, by = 0.5), minor_breaks = seq(-1.5, 0.5, by = 0.5), limits = c(-1.6,0.8) ) + scale_color_manual(values = c("10" = "blue", "5" = "red", "3" = "#808000")) + theme(legend.position = "none")
+
+# Power
+Test2p5 <- c1(quantile(f10Test2_H0, probs = 0.04043))
+Test2p6 <- c2(quantile(f10Test2_H0, probs = 0.04043))
+Test2p7 <- c1(quantile(f10Test2_H0, probs = 0.10682))
+Test2p8 <- c2(quantile(f10Test2_H0, probs = 0.10682))
+
+cdf / pdf + plot_layout(heights = c(2, 1))
+```
+
+# Figur 10 - Test 3
+
+```{r}
+# For Z3 med standardiseret t-fordeling for gamma = 1 og forskellige df'er
+f10Test3_H0 <- Z3_sim(10, 10)
+f10Test3_H1 <- Z3_sim(10, 5)
+f10Test3_H2 <- Z3_sim(10, 3)
+
+# Plot CDF
+n <- 1000
+c0 <- ecdf(f10Test3_H0)
+c1 <- ecdf(f10Test3_H1)
+c2 <- ecdf(f10Test3_H2)
+
+x <- seq(-1.3, 0.4, length.out = n)
+
+cdf_data <- data.frame(x = x, y = c(c0(x), 1 - c1(x), 1 - c2(x)),
+                       df = rep(c("10", "5", "3"), each = n))
+
+green5 <- quantile(f10Test3_H0, probs = 0.05)
+green10 <- quantile(f10Test3_H0, probs = 0.10)
+black5 <- quantile(f10Test3_H0, probs = 0.04043)
+black10 <- quantile(f10Test3_H0, probs = 0.10682)
+
+lines <- tibble(lines = c(green5, green10, black5, black10), group = c("green", "green", "black", "black"))
+
+cdf <- ggplot(cdf_data, aes(x = x, y = y, color = df)) +
+  geom_line(linewidth = 1) + geom_vline(data = lines, aes(xintercept = lines, color = group))+
+  labs(title = "ES2.5% | Test3",x = "", y = "Fordelingsfunktion", color = "Df") + scale_y_continuous(breaks = seq(0, 1, by = 0.1), minor_breaks = seq(0, 1, by = 0.1)) + scale_x_continuous(breaks = seq(-1.2, 0.2, by = 0.2), minor_breaks = seq(-1.2, 0.2, by = 0.2),label = scales::label_number(accuracy = 0.1), limits = c(-1.3, 0.4)) + scale_color_manual(values = c("10" = "blue", "5" = "red", "3" = "#808000", "green" = "green", "black" = "black"))+theme(legend.position = "none")
+
+# Plot PDF
+d0 <- density(f10Test3_H0, n = n)
+d1 <- density(f10Test3_H1, n = n)
+d2 <- density(f10Test3_H2, n = n)
+
+pdf_data <- data.frame(x = c(d0$x, d1$x, d2$x), y = c(d0$y, d1$y, d2$y),
+                       df = rep(c("10", "5", "3"), each = n))
+
+pdf <- ggplot(pdf_data, aes(x = x, y = y, color = df)) +
+  geom_line(linewidth = 1) + labs(title = "", x = "", y = "Tæthed", color = "Df") + scale_y_continuous(breaks = seq(0, 5, by = 1), minor_breaks = seq(0, 5, by = 1)) + scale_x_continuous(breaks = seq(-1.2, 0.2, by = 0.2), minor_breaks = seq(-1.2, 0.2, by = 0.2),label = scales::label_number(accuracy = 0.1), limits = c(-1.3, 0.4)) + scale_color_manual(values = c("10" = "blue", "5" = "red", "3" = "#808000")) +theme(legend.position = "none")
+
+# Power
+Test3p5 <- c1(quantile(f10Test3_H0, probs = 0.04043))
+Test3p6 <- c2(quantile(f10Test3_H0, probs = 0.04043))
+Test3p7 <- c1(quantile(f10Test3_H0, probs = 0.10682))
+Test3p8 <- c2(quantile(f10Test3_H0, probs = 0.10682))
+
+cdf / pdf + plot_layout(heights = c(2, 1))
+```
+
+# 'Figur 10' - Test 4
+
+```{r}
+# For Z4 med standardiseret t-fordeling for gamma = 1 og forskellige df'er
+f10Test4_H0 <- Z4_sim(10, 10)
+f10Test4_H1 <- Z4_sim(10, 5)
+f10Test4_H2 <- Z4_sim(10, 3)
+
+# Plot CDF
+n <- 1000
+c0 <- ecdf(f10Test4_H0)
+c1 <- ecdf(f10Test4_H1)
+c2 <- ecdf(f10Test4_H2)
+
+x <- seq(-1.3, 0.21, length.out = n)
+
+cdf_data <- data.frame(x = x, y = c(c0(x), 1 - c1(x), 1 - c2(x)),
+                       df = rep(c("10", "5", "3"), each = n))
+
+green5 <- quantile(f10Test4_H0, probs = 0.05)
+green10 <- quantile(f10Test4_H0, probs = 0.10)
+black5 <- quantile(f10Test4_H0, probs = 0.04043)
+black10 <- quantile(f10Test4_H0, probs = 0.10682)
+
+lines <- tibble(lines = c(green5, green10, black5, black10), group = c("green", "green", "black", "black"))
+
+cdf <- ggplot(cdf_data, aes(x = x, y = y, color = df)) +
+  geom_line(linewidth = 1) + geom_vline(data = lines, aes(xintercept = lines, color = group))+
+  labs(title = "ES2.5% | Test4",x = "", y = "Fordeling", color = "Df") + scale_y_continuous(breaks = seq(0, 1, by = 0.1), minor_breaks = seq(0, 1, by = 0.1)) + scale_x_continuous(breaks = seq(-1.2, 0.2, by = 0.2), minor_breaks = seq(-1.2, 0.2, by = 0.2),label = scales::label_number(accuracy = 0.1), limits = c(-1.3, 0.21)) + scale_color_manual(values = c("10" = "blue", "5" = "red", "3" = "#808000", "green" = "green", "black" = "black"))+theme(legend.position = "none")
+
+# Plot PDF
+d0 <- density(f10Test4_H0, n = n)
+d1 <- density(f10Test4_H1, n = n)
+d2 <- density(f10Test4_H2, n = n)
+
+pdf_data <- data.frame(x = c(d0$x, d1$x, d2$x), y = c(d0$y, d1$y, d2$y),
+                       df = rep(c("10", "5", "3"), each = n))
+
+pdf <- ggplot(pdf_data, aes(x = x, y = y, color = df)) +
+  geom_line(linewidth = 1) +labs(title = "", x = "", y = "Tæthed", color = "Df") + scale_y_continuous(breaks = seq(0, 5, by = 1), minor_breaks = seq(0, 5, by = 1)) + scale_x_continuous(breaks = seq(-1.2, 0.2, by = 0.2), minor_breaks = seq(-1.2, 0.2, by = 0.2),label = scales::label_number(accuracy = 0.1), limits = c(-1.3, 0.21)) + scale_color_manual(values = c("10" = "blue", "5" = "red", "3" = "#808000")) +theme(legend.position = "none")
+
+# Power
+Test4p5 <- c1(quantile(f10Test4_H0, probs = 0.04043))
+Test4p6 <- c2(quantile(f10Test4_H0, probs = 0.04043))
+Test4p7 <- c1(quantile(f10Test4_H0, probs = 0.10682))
+Test4p8 <- c2(quantile(f10Test4_H0, probs = 0.10682))
+
+cdf / pdf + plot_layout(heights = c(2, 1))
+```
+
+## Figur 10 - numExceedances
+
+```{r}
+# For numExceedances med standardiseret t-fordeling for gamma = 1 og forskellige df'er
+f10numExceedances_H0 <- numExceedances_sim(10, 10)
+f10numExceedances_H1 <- numExceedances_sim(10, 5)
+f10numExceedances_H2 <- numExceedances_sim(10, 3)
+
+#sig-niveau
+f <- function(p) {
+  quantile(f10numExceedances_H0, probs = p)
+}
+p6_value <- seq(0.038, 0.05, length.out = 10000)
+f6_values <- sapply(p6_value, f)
+valid_p6 <- p6_value[f6_values == -6]
+p6 <- round(max(valid_p6), 6)
+p6
+
+p5_value <- seq(0.1035, 0.115, length.out = 10000)
+f5_values <- sapply(p5_value, f)
+valid_p5 <- p5_value[f5_values == -5]
+p5 <- round(max(valid_p5), 6)
+p5
+
+# Plot CDF
+n <- 1000
+c0 <- ecdf(f10numExceedances_H0)
+c1 <- ecdf(f10numExceedances_H1)
+c2 <- ecdf(f10numExceedances_H2)
+
+x <- seq(-8, 0, length.out = n)
+
+cdf_data <- data.frame(x = x, y = c(c0(x), 1 - c1(x), 1 - c2(x)),
+                       df = rep(c("10", "5", "3"), each = n))
+
+black5 <- quantile(f10numExceedances_H0, probs = 0.04043)
+black10 <- quantile(f10numExceedances_H0, probs = 0.10682)
+
+lines <- tibble(lines = c(black5, black10), group = c("black", "black"))
+
+cdf <- ggplot(cdf_data, aes(x = x, y = y, color = df)) +
+  geom_line(linewidth = 1) + geom_vline(data = lines, aes(xintercept = lines, color = group))+
+  labs(title = "VaR1% | numExceedances",x = "", y = "Fordeling", color = "Df") + scale_y_continuous(breaks = seq(0, 1, by = 0.1), minor_breaks = seq(0, 1, by = 0.1)) + scale_x_continuous(breaks = seq(-8, 0, by = 1), minor_breaks = seq(-8, 0, by = 1), limits = c(-8,0)) + scale_color_manual(values = c("10" = "blue", "5" = "red", "3" = "#808000", "black" = "black"))+theme(legend.position = "none")
+
+# Plot PDF
+d0 <- density(f10numExceedances_H0, n = n)
+d1 <- density(f10numExceedances_H1, n = n)
+d2 <- density(f10numExceedances_H2, n = n)
+
+pdf_data <- data.frame(x = c(d0$x, d1$x, d2$x), y = c(d0$y, d1$y, d2$y),
+                       df = rep(c("10", "5", "3"), each = n))
+
+pdf <- ggplot(pdf_data, aes(x = x, y = y, color = df)) +
+  geom_line(linewidth = 1) +
+  labs(title = "", x = "", y = "Tæthed", color = "Df") + scale_y_continuous(breaks = seq(0, 1, by = 0.5), minor_breaks = seq(0, 1, by = 0.5)) + scale_x_continuous(breaks = seq(-8, 0, by = 1), minor_breaks = seq(-8, 0, by = 1), limits = c(-8,0)) + scale_color_manual(values = c("10" = "blue", "5" = "red", "3" = "#808000")) +theme(legend.position = "none")
+
+# Power
+numEp5 <- c1(quantile(f10numExceedances_H0, probs = 0.04043))
+numEp6 <- c2(quantile(f10numExceedances_H0, probs = 0.04043))
+numEp7 <- c1(quantile(f10numExceedances_H0, probs = 0.10682))
+numEp8 <- c2(quantile(f10numExceedances_H0, probs = 0.10682))
+
+cdf / pdf + plot_layout(heights = c(2, 1))
+```
+
+## Nedre del af Tabel 2
+
+```{r}
+sig <- c(rep(4.4,2), rep(11.2,2), rep(4.4,2), rep(11,2))
+df0 <- c(rep(10,4), rep(100,4))
+df1 <- c(rep(c(5,3),2), rep(c(10,3),2))
+
+Test2p <- c(Test2p5,Test2p6, Test2p7, Test2p8, Test2p1, Test2p2, Test2p3, Test2p4)
+Test3p <- c(Test3p5,Test3p6, Test3p7, Test3p8, Test3p1, Test3p2, Test3p3, Test3p4)
+Test4p <- c(Test4p5,Test4p6, Test4p7, Test4p8, Test4p1, Test4p2, Test4p3, Test4p4)
+numEp <- c(numEp5, numEp6, numEp7, numEp8, numEp1, numEp2, numEp3, numEp4)
+
+Table <- data.frame(cbind("v_H0" = df0, "Signifikans_niveau" = sig, "v_H1" = df1, "Z2" = Test2p*100, "Z3" = Test3p*100, "Z4" = Test4p*100, "VaR1" = numEp*100))
+print(Table)
+```
+
+# Figur 12 og 13
+
+```{r}
+Z1_sim <- function(df0, df1) {
+  T <- 250
+  M <- 10^5
+  alpha <- 0.025
+  ES <- -integrate(function(q) qt(q, df0), 0, alpha)$value/alpha
+  VaR <- -qt(alpha,df0)
+  diff <- qt(alpha,df0)-qt(alpha, df1)  
+  Z <- vector("numeric", N)
+  set.seed(4652374)
+  for (j in 1:N) {
+    Xt <- rt(T,df1)+diff
+    Z[j] <- sum(Xt*(Xt + VaR < 0)/ES)/(ifelse(sum((Xt + VaR < 0)) > 0, sum((Xt + VaR < 0)), 1))+1
+  }
+  return(Z)
+}
+
+Z2_sim <- function(df0, df1) {
+  T <- 250
+  N <- 10^5
+  alpha <- 0.025
+  ES <- -integrate(function(q) qt(q, df0), 0, alpha)$value/alpha
+  VaR <- -qt(alpha, df0)
+  diff <- qt(alpha,df0)-qt(alpha, df1)
+  num <- T*alpha*ES
+  Z <- vector("numeric", N)
+  set.seed(4652374)
+  for (j in 1:N) {
+    Xt <- rt(T, df1)+diff
+    Z[j] <- sum(Xt*(Xt + VaR < 0))/(num) + 1
+  }
+  return(Z)}
+
+Z3_sim <- function(df0,df1) {
+  T <- 250
+  N <- 10^5
+  alpha <- 0.025
+  diff <- qt(alpha,df0)-qt(alpha, df1)
+  integer <- floor(T*alpha)
+  Z <- vector("numeric", N)
+  set.seed(4652374)
+  for (j in 1:N){
+    lowestXt <- sort(rt(T, df1) + diff)[1:integer]
+    ESestimator <- -1/integer*sum(lowestXt)
+    integrale <- integrate(function(q) pbeta(1-q,T-integer,integer)*qt(q, df0),0, 1)$value
+    EVanalytical <- -integrale*(T/integer)
+    
+    Z[j] <- -(ESestimator/EVanalytical)+1
+  }
+  return(Z)}
+
+Z4_sim <- function(df0, df1) {
+  T <- 250
+  N <- 10^5
+  alpha <- 0.025
+  ES <- -integrate(function(q) qt(q, df0), 0, alpha)$value/alpha
+  VaR <- -qt(alpha, df0)
+  diff <- qt(alpha,df0)-qt(alpha, df1)
+  num <- T*alpha*ES
+  Z <- vector("numeric", N)
+  set.seed(4652374)
+  for (j in 1:N) {
+    Xt <- rt(T, df1) + diff
+    Z[j] <- sum((alpha*(-VaR)+(Xt+VaR)*(Xt + VaR < 0))/(num)) + 1
+  }
+  return(Z)}
+
+numExceedances_sim <- function(df0, df1){
+  T <- 250
+  N <- 10^5
+  alpha <- 0.025
+  beta <- 0.01
+  VaR <- -qt(beta, df0)
+  diff <- qt(alpha,df0)-qt(alpha, df1)
+  Exceedance <- vector("numeric", N)
+  set.seed(4652374)
+  for (j in 1:N){
+    Xt <- rt(T, df1) + diff
+    Exceedance[j] <- -sum((Xt + VaR < 0))
+  }
+  return(Exceedance)}
+
+```
+
+# Figur 12 - Test 1
+
+```{r}
+# For Z2 med fixed VaR og forskellige df'er
+f12Test1_H0 <- Z1_sim(100, 100)
+f12Test1_H1 <- Z1_sim(100, 10)
+f12Test1_H2 <- Z1_sim(100, 5)
+f12Test1_H3 <- Z1_sim(100, 3)
+
+# Plot CDF
+n <- 1000
+c0 <- ecdf(f12Test1_H0)
+c1 <- ecdf(f12Test1_H1)
+c2 <- ecdf(f12Test1_H2)
+c3 <- ecdf(f12Test1_H3)
+
+x <- seq(-2.5, 0.15, length.out = n)
+
+cdf_data <- data.frame(x = x, y = c(c0(x), 1 - c1(x), 1 - c2(x), 1 - c3(x)),
+                       df = rep(c("100", "10", "5", "3"), each = n))
+
+green5 <- quantile(f12Test1_H0, probs = 0.05)
+green10 <- quantile(f12Test1_H0, probs = 0.10)
+black5 <- quantile(f12Test1_H0, probs = 0.04174)
+black10 <- quantile(f12Test1_H0, probs = 0.10786)
+
+lines <- tibble(lines = c(green5, green10, black5, black10), group = c("green", "green", "black", "black"))
+
+cdf <- ggplot(cdf_data, aes(x = x, y = y, color = df)) +
+  geom_line(linewidth = 1) + geom_vline(data = lines, aes(xintercept = lines, color = group)) +
+  labs(title = "ES2.5% | Test1",x = "", y = "Fordeling", color = "Df") + scale_y_continuous(breaks = seq(0, 1, by = 0.1), minor_breaks = seq(0, 1, by = 0.1)) + scale_x_continuous(breaks = seq(-2.5, 0.5, by = 0.5), minor_breaks = seq(-2.5, 0.5, by = 0.5), limits = c(-2.5,0.15) ) + scale_color_manual(values = c("100" = "blue", "10" = "red", "5" = "#808000", "3" = "darkred", "green" = "green", "black" = "black"))+theme(legend.position = "none")
+
+# Plot PDF
+d0 <- density(f12Test1_H0, n = n)
+d1 <- density(f12Test1_H1, n = n)
+d2 <- density(f12Test1_H2, n = n)
+d3 <- density(f12Test1_H3, n = n)
+
+pdf_data <- data.frame(x = c(d0$x, d1$x, d2$x, d3$x), y = c(d0$y, d1$y, d2$y, d3$y),
+                       df = rep(c("100", "10", "5", "3"), each = n))
+
+pdf <- ggplot(pdf_data, aes(x = x, y = y, color = df)) +
+  geom_line(linewidth = 1) + labs(title = "", x = "", y = "Tæthed", color = "Df") + scale_y_continuous(breaks = seq(0, 7, by = 2), minor_breaks = seq(0, 7, by = 2)) + scale_x_continuous(breaks = seq(-2.5, 0.5, by = 0.5), minor_breaks = seq(-2.5, 0.5, by = 0.5), limits = c(-2.5,0.15) ) + scale_color_manual(values = c("100" = "blue", "10" = "red", "5" = "#808000", "3" = "darkred"))+theme(legend.position = "none")
+
+# Power
+Test1p1 <- c1(quantile(f12Test1_H0, probs = 0.04174))
+Test1p2 <- c3(quantile(f12Test1_H0, probs = 0.04174))
+Test1p3 <- c1(quantile(f12Test1_H0, probs = 0.10786))
+Test1p4 <- c3(quantile(f12Test1_H0, probs = 0.10786))
+
+cdf / pdf + plot_layout(heights = c(2, 1))
+```
+
+# Figur 12 - Test 2
+
+```{r}
+# For Z2 med fixed VaR og forskellige df'er
+f12Test2_H0 <- Z2_sim(100, 100)
+f12Test2_H1 <- Z2_sim(100, 10)
+f12Test2_H2 <- Z2_sim(100, 5)
+f12Test2_H3 <- Z2_sim(100, 3)
+
+# Plot CDF
+n <- 1000
+c0 <- ecdf(f12Test2_H0)
+c1 <- ecdf(f12Test2_H1)
+c2 <- ecdf(f12Test2_H2)
+c3 <- ecdf(f12Test2_H3)
+
+x <- seq(-3, 0.8, length.out = n)
+
+cdf_data <- data.frame(x = x, y = c(c0(x), 1 - c1(x), 1 - c2(x), 1 - c3(x)),
+                       df = rep(c("100", "10", "5", "3"), each = n))
+
+green5 <- quantile(f12Test2_H0, probs = 0.05)
+green10 <- quantile(f12Test2_H0, probs = 0.10)
+black5 <- quantile(f12Test2_H0, probs = 0.04174)
+black10 <- quantile(f12Test2_H0, probs = 0.10786)
+
+lines <- tibble(lines = c(green5, green10, black5, black10), group = c("green", "green", "black", "black"))
+
+cdf <- ggplot(cdf_data, aes(x = x, y = y, color = df)) +
+  geom_line(linewidth = 1) + geom_vline(data = lines, aes(xintercept = lines, color = group)) +
+  labs(title = "ES2.5% | Test2",x = "", y = "Fordeling", color = "Df") + scale_y_continuous(breaks = seq(0, 1, by = 0.1), minor_breaks = seq(0, 1, by = 0.1)) + scale_x_continuous(breaks = seq(-2.5, 0.5, by = 0.5), minor_breaks = seq(-2.5, 0.5, by = 0.5), limits = c(-3,0.8) ) + scale_color_manual(values = c("100" = "blue", "10" = "red", "5" = "#808000", "3" = "darkred", "green" = "green", "black" = "black"))+theme(legend.position = "none")
+
+# Plot PDF
+d0 <- density(f12Test2_H0, n = n)
+d1 <- density(f12Test2_H1, n = n)
+d2 <- density(f12Test2_H2, n = n)
+d3 <- density(f12Test2_H3, n = n)
+
+pdf_data <- data.frame(x = c(d0$x, d1$x, d2$x, d3$x), y = c(d0$y, d1$y, d2$y, d3$y),
+                       df = rep(c("100", "10", "5", "3"), each = n))
+
+pdf <- ggplot(pdf_data, aes(x = x, y = y, color = df)) +
+  geom_line(linewidth = 1) + labs(title = "", x = "", y = "Tæthed", color = "Df") + scale_y_continuous(breaks = seq(0, 5, by = 0.5), minor_breaks = seq(0, 5, by = 0.5)) + scale_x_continuous(breaks = seq(-2.5, 0.5, by = 0.5), minor_breaks = seq(-2.5, 0.5, by = 0.5), limits = c(-3,0.8) ) + scale_color_manual(values = c("100" = "blue", "10" = "red", "5" = "#808000", "3" = "darkred")) +theme(legend.position = "none")
+
+# Power
+Test2p1 <- c1(quantile(f12Test2_H0, probs = 0.04174))
+Test2p2 <- c3(quantile(f12Test2_H0, probs = 0.04174))
+Test2p3 <- c1(quantile(f12Test2_H0, probs = 0.10786))
+Test2p4 <- c3(quantile(f12Test2_H0, probs = 0.10786))
+
+cdf / pdf + plot_layout(heights = c(2, 1))
+```
+
+# Figur 12 - Test 3
+
+```{r}
+# For Z3 med fixed VaR og forskellige df'er
+f12Test3_H0 <- Z3_sim(100, 100)
+f12Test3_H1 <- Z3_sim(100, 10)
+f12Test3_H2 <- Z3_sim(100, 5)
+f12Test3_H3 <- Z3_sim(100, 3)
+
+# Plot CDF
+n <- 1000
+c0 <- ecdf(f12Test3_H0)
+c1 <- ecdf(f12Test3_H1)
+c2 <- ecdf(f12Test3_H2)
+c3 <- ecdf(f12Test3_H3)
+
+x <- seq(-2.5, 0.25, length.out = n)
+
+cdf_data <- data.frame(x = x, y = c(c0(x), 1 - c1(x), 1 - c2(x), 1 - c3(x)),
+                       df = rep(c("100", "10", "5", "3"), each = n))
+
+green5 <- quantile(f12Test3_H0, probs = 0.05)
+green10 <- quantile(f12Test3_H0, probs = 0.10)
+black5 <- quantile(f12Test3_H0, probs = 0.04174)
+black10 <- quantile(f12Test3_H0, probs = 0.10786)
+
+lines <- tibble(lines = c(green5, green10, black5, black10), group = c("green", "green", "black", "black"))
+
+cdf <- ggplot(cdf_data, aes(x = x, y = y, color = df)) +
+  geom_line(linewidth = 1) + geom_vline(data = lines, aes(xintercept = lines, color = group)) +
+  labs(title = "ES2.5% | Test3",x = "", y = "Fordeling", color = "Df") + scale_y_continuous(breaks = seq(0, 1, by = 0.1), minor_breaks = seq(0, 1, by = 0.1)) + scale_x_continuous(breaks = seq(-2.5, 0, by = 0.5), minor_breaks = seq(-2.5, 0, by = 0.5), limits = c(-2.5,0.25) ) + scale_color_manual(values = c("100" = "blue", "10" = "red", "5" = "#808000", "3" = "darkred", "green" = "green", "black" = "black"))+theme(legend.position = "none")
+
+# Plot PDF
+d0 <- density(f12Test3_H0, n = n)
+d1 <- density(f12Test3_H1, n = n)
+d2 <- density(f12Test3_H2, n = n)
+d3 <- density(f12Test3_H3, n = n)
+
+pdf_data <- data.frame(x = c(d0$x, d1$x, d2$x, d3$x), y = c(d0$y, d1$y, d2$y, d3$y),
+                       df = rep(c("100", "10", "5", "3"), each = n))
+
+pdf <- ggplot(pdf_data, aes(x = x, y = y, color = df)) +
+  geom_line(linewidth = 1) + labs(title = "", x = "", y = "Tæthed", color = "Df") + scale_y_continuous(breaks = seq(0, 5, by = 1), minor_breaks = seq(0, 5, by = 1)) + scale_x_continuous(breaks = seq(-2.5, 0, by = 0.5), minor_breaks = seq(-2.5, 0, by = 0.5), limits = c(-2.5,0.25) ) + scale_color_manual(values = c("100" = "blue", "10" = "red", "5" = "#808000", "3" = "darkred")) + theme(legend.position = "none")
+
+# Power
+Test3p1 <- c1(quantile(f12Test3_H0, probs = 0.04174))
+Test3p2 <- c3(quantile(f12Test3_H0, probs = 0.04174))
+Test3p3 <- c1(quantile(f12Test3_H0, probs = 0.10786))
+Test3p4 <- c3(quantile(f12Test3_H0, probs = 0.10786))
+
+cdf / pdf + plot_layout(heights = c(2, 1))
+```
+
+# 'Figur 12' - Test 4
+
+```{r}
+# For Z4 med fixed VaR og forskellige df'er
+f12Test4_H0 <- Z4_sim(100, 100)
+f12Test4_H1 <- Z4_sim(100, 10)
+f12Test4_H2 <- Z4_sim(100, 5) 
+f12Test4_H3 <- Z4_sim(100, 3)
+
+# Plot CDF
+n <- 1000
+c0 <- ecdf(f12Test4_H0)
+c1 <- ecdf(f12Test4_H1)
+c2 <- ecdf(f12Test4_H2)
+c3 <- ecdf(f12Test4_H3)
+
+x <- seq(-2.5, 0.2, length.out = n)
+
+cdf_data <- data.frame(x = x, y = c(c0(x), 1 - c1(x), 1 - c2(x), 1 - c3(x)),
+                       df = rep(c("100", "10", "5", "3"), each = n))
+
+green5 <- quantile(f12Test4_H0, probs = 0.05)
+green10 <- quantile(f12Test4_H0, probs = 0.10)
+black5 <- quantile(f12Test4_H0, probs = 0.04174)
+black10 <- quantile(f12Test4_H0, probs = 0.10786)
+
+lines <- tibble(lines = c(green5, green10, black5, black10), group = c("green", "green", "black", "black"))
+
+cdf <- ggplot(cdf_data, aes(x = x, y = y, color = df)) +
+  geom_line(linewidth = 1) + geom_vline(data = lines, aes(xintercept = lines, color = group)) +
+  labs(title = "ES2.5% | Test4",x = "", y = "Fordeling", color = "Df") + scale_y_continuous(breaks = seq(0, 1, by = 0.1), minor_breaks = seq(0, 1, by = 0.1)) + scale_x_continuous(breaks = seq(-2.5, 0, by = 0.5), minor_breaks = seq(-2.5, 0, by = 0.5), limits = c(-2.5,0.2) ) + scale_color_manual(values = c("100" = "blue", "10" = "red", "5" = "#808000", "3" = "darkred", "green" = "green", "black" = "black"))+theme(legend.position = "none")
+
+# Plot PDF
+d0 <- density(f12Test4_H0, n = n)
+d1 <- density(f12Test4_H1, n = n)
+d2 <- density(f12Test4_H2, n = n)
+d3 <- density(f12Test4_H3, n = n)
+
+pdf_data <- data.frame(x = c(d0$x, d1$x, d2$x, d3$x), y = c(d0$y, d1$y, d2$y, d3$y),
+                       df = rep(c("100", "10", "5", "3"), each = n))
+
+pdf <- ggplot(pdf_data, aes(x = x, y = y, color = df)) +
+  geom_line(linewidth = 1) + labs(title = "", x = "", y = "Tæthed", color = "Df") + scale_y_continuous(breaks = seq(0, 5, by = 1), minor_breaks = seq(0, 5, by = 1)) + scale_x_continuous(breaks = seq(-2.5, 0, by = 0.5), minor_breaks = seq(-2.5, 0, by = 0.5), limits = c(-2.5,0.2) ) + scale_color_manual(values = c("100" = "blue", "10" = "red", "5" = "#808000", "3" = "darkred")) +theme(legend.position = "none")
+
+# Power
+Test4p1 <- c1(quantile(f12Test4_H0, probs = 0.04174)) # 
+Test4p2 <- c3(quantile(f12Test4_H0, probs = 0.04174)) # 
+Test4p3 <- c1(quantile(f12Test4_H0, probs = 0.10786)) # 
+Test4p4 <- c3(quantile(f12Test4_H0, probs = 0.10786)) # 
+
+cdf / pdf + plot_layout(heights = c(2, 1))
+```
+
+## Figur 12 - numExceedances
+
+```{r}
+# For numExceedances med fixed VaR og forskellige df'er
+f12numExceedances_H0 <- numExceedances_sim(100, 100)
+f12numExceedances_H1 <- numExceedances_sim(100, 10)
+f12numExceedances_H2 <- numExceedances_sim(100, 5)
+f12numExceedances_H3 <- numExceedances_sim(100, 3)
+
+#sig-niveau
+f <- function(p) {
+  quantile(f12numExceedances_H0, probs = p)
+}
+p6_value <- seq(0.038, 0.05, length.out = 10000)
+f6_values <- sapply(p6_value, f)
+valid_p6 <- p6_value[f6_values == -6]
+p6 <- round(max(valid_p6), 6)
+p6
+
+p5_value <- seq(0.1035, 0.115, length.out = 10000)
+f5_values <- sapply(p5_value, f)
+valid_p5 <- p5_value[f5_values == -5]
+p5 <- round(max(valid_p5), 6)
+p5
+
+# Plot CDF
+n <- 1000
+c0 <- ecdf(f12numExceedances_H0)
+c1 <- ecdf(f12numExceedances_H1)
+c2 <- ecdf(f12numExceedances_H2)
+c3 <- ecdf(f12numExceedances_H3)
+
+x <- seq(-10, 0, length.out = n)
+
+cdf_data <- data.frame(x = x, y = c(c0(x), 1 - c1(x), 1 - c2(x), 1 - c3(x)),
+                       df = rep(c("100", "10", "5", "3"), each = n))
+
+black5 <- quantile(f12numExceedances_H0, probs = 0.04174)
+black10 <- quantile(f12numExceedances_H0, probs = 0.10786)
+
+lines <- tibble(lines = c(black5, black10), group = c("black", "black"))
+
+cdf <- ggplot(cdf_data, aes(x = x, y = y, color = df)) +
+  geom_line(linewidth = 1) + geom_vline(data = lines, aes(xintercept = lines, color = group)) + 
+  labs(title = "VaR1% | numExceedances",x = "", y = "Fordeling", color = "Df") + scale_y_continuous(breaks = seq(0, 1, by = 0.1), minor_breaks = seq(0, 1, by = 0.1)) + scale_x_continuous(breaks = seq(-10, 0, by = 1), minor_breaks = seq(-10, 0, by = 1), limits = c(-10,0)) + scale_color_manual(values = c("100" = "blue", "10" = "red", "5" = "#808000", "3"="darkred", "black" = "black"))+theme(legend.position = "none")
+
+# Plot PDF
+d0 <- density(f12numExceedances_H0, n = n)
+d1 <- density(f12numExceedances_H1, n = n)
+d2 <- density(f12numExceedances_H2, n = n)
+d3 <- density(f12numExceedances_H3, n = n)
+
+pdf_data <- data.frame(x = c(d0$x, d1$x, d2$x, d3$x), y = c(d0$y, d1$y, d2$y, d3$y),
+                       df = rep(c("100", "10", "5", "3"), each = n))
+
+pdf <- ggplot(pdf_data, aes(x = x, y = y, color = df)) +
+  geom_line(linewidth = 1) + labs(title = "", x = "", y = "Tæthed", color = "Df") + scale_y_continuous(breaks = seq(0, 5, by = 0.5), minor_breaks = seq(0, 5, by = 0.5)) + scale_x_continuous(breaks = seq(-10, 0, by = 1), minor_breaks = seq(-10, 0, by = 1), limits = c(-10,0)) + scale_color_manual(values = c("100" = "blue", "10" = "red", "5" = "#808000", "3" = "darkred")) +theme(legend.position = "none")
+
+# Power
+numEp1 <- c1(quantile(f12numExceedances_H0, probs = 0.04174))
+numEp2 <- c3(quantile(f12numExceedances_H0, probs = 0.04174))
+numEp3 <- c1(quantile(f12numExceedances_H0, probs = 0.10786))
+numEp4 <- c3(quantile(f12numExceedances_H0, probs = 0.10786))
+
+cdf / pdf + plot_layout(heights = c(2, 1))
+```
+
+# Figur 13 - Test 1
+
+```{r}
+# For Z2 med fixed VaR og forskellige df'er
+f13Test1_H0 <- Z1_sim(10, 10)
+f13Test1_H1 <- Z1_sim(10, 5)
+f13Test1_H2 <- Z1_sim(10, 3)
+
+# Plot CDF
+n <- 1000
+c0 <- ecdf(f13Test1_H0)
+c1 <- ecdf(f13Test1_H1)
+c2 <- ecdf(f13Test1_H2)
+
+x <- seq(-2.2, 0.2, length.out = n)
+
+cdf_data <- data.frame(x = x, y = c(c0(x), 1 - c1(x), 1 - c2(x)),
+                       df = rep(c("10", "5", "3"), each = n))
+
+green5 <- quantile(f13Test1_H0, probs = 0.05)
+green10 <- quantile(f13Test1_H0, probs = 0.10)
+black5 <- quantile(f13Test1_H0, probs = 0.04043)
+black10 <- quantile(f13Test1_H0, probs = 0.10682)
+
+lines <- tibble(lines = c(green5, green10, black5, black10), group = c("green", "green", "black", "black"))
+
+cdf <- ggplot(cdf_data, aes(x = x, y = y, color = df)) +
+  geom_line(linewidth = 1) + geom_vline(data = lines, aes(xintercept = lines, color = group)) +
+  labs(title = "ES2.5% | Test1",x = "", y = "Fordeling", color = "Df") + scale_y_continuous(breaks = seq(0, 1, by = 0.1), minor_breaks = seq(0, 1, by = 0.1)) + scale_x_continuous(breaks = seq(-2.5, 0.5, by = 0.5), minor_breaks = seq(-2.5, 0.5, by = 0.5), limits = c(-2.2, 0.2) ) + scale_color_manual(values = c("10" = "blue", "5" = "red", "3" = "#808000", "green" = "green", "black" = "black"))+theme(legend.position = "none")
+
+# Plot PDF
+d0 <- density(f13Test1_H0, n = n)
+d1 <- density(f13Test1_H1, n = n)
+d2 <- density(f13Test1_H2, n = n)
+
+pdf_data <- data.frame(x = c(d0$x, d1$x, d2$x), y = c(d0$y, d1$y, d2$y),
+                       df = rep(c("10", "5", "3"), each = n))
+
+pdf <- ggplot(pdf_data, aes(x = x, y = y, color = df)) +
+  geom_line(linewidth = 1) + labs(title = "", x = "", y = "Tæthed", color = "Df") + scale_y_continuous(breaks = seq(0, 5, by = 1), minor_breaks = seq(0, 5, by = 1)) + scale_x_continuous(breaks = seq(-2.5, 0.5, by = 0.5), minor_breaks = seq(-2.5, 0.5, by = 0.5), limits = c(-2.2, 0.2) ) + scale_color_manual(values = c("10" = "blue", "5" = "red", "3" = "#808000")) +theme(legend.position = "none")
+
+# Power
+Test1p5 <- c1(quantile(f13Test1_H0, probs = 0.04043))
+Test1p6 <- c2(quantile(f13Test1_H0, probs = 0.04043))
+Test1p7 <- c1(quantile(f13Test1_H0, probs = 0.10682))
+Test1p8 <- c2(quantile(f13Test1_H0, probs = 0.10682))
+
+cdf / pdf + plot_layout(heights = c(2, 1))
+```
+
+# Figur 13 - Test 2
+
+```{r}
+# For Z2 med fixed VaR og forskellige df'er
+f13Test2_H0 <- Z2_sim(10, 10)
+f13Test2_H1 <- Z2_sim(10, 5)
+f13Test2_H2 <- Z2_sim(10, 3)
+ 
+# Plot CDF
+n <- 1000
+c0 <- ecdf(f13Test2_H0)
+c1 <- ecdf(f13Test2_H1)
+c2 <- ecdf(f13Test2_H2)
+
+x <- seq(-2.5, 0.8, length.out = n)
+
+cdf_data <- data.frame(x = x, y = c(c0(x), 1 - c1(x), 1 - c2(x)),
+                       df = rep(c("10", "5", "3"), each = n))
+
+green5 <- quantile(f13Test2_H0, probs = 0.05)
+green10 <- quantile(f13Test2_H0, probs = 0.10)
+black5 <- quantile(f13Test2_H0, probs = 0.04043)
+black10 <- quantile(f13Test2_H0, probs = 0.10682)
+
+lines <- tibble(lines = c(green5, green10, black5, black10), group = c("green", "green", "black", "black"))
+
+cdf <- ggplot(cdf_data, aes(x = x, y = y, color = df)) +
+  geom_line(linewidth = 1) + geom_vline(data = lines, aes(xintercept = lines, color = group)) +
+  labs(title = "ES2.5% | Test2",x = "", y = "Fordeling", color = "Df") + scale_y_continuous(breaks = seq(0, 1, by = 0.1), minor_breaks = seq(0, 1, by = 0.1)) + scale_x_continuous(breaks = seq(-2.5, 0.5, by = 0.5), minor_breaks = seq(-2.5, 0.5, by = 0.5), limits = c(-2.5, 0.8) ) + scale_color_manual(values = c("10" = "blue", "5" = "red", "3" = "#808000", "green" = "green", "black" = "black"))+theme(legend.position = "none")
+
+# Plot PDF
+d0 <- density(f13Test2_H0, n = n)
+d1 <- density(f13Test2_H1, n = n)
+d2 <- density(f13Test2_H2, n = n)
+
+pdf_data <- data.frame(x = c(d0$x, d1$x, d2$x), y = c(d0$y, d1$y, d2$y),
+                       df = rep(c("10", "5", "3"), each = n))
+
+pdf <- ggplot(pdf_data, aes(x = x, y = y, color = df)) +
+  geom_line(linewidth = 1) + labs(title = "", x = "", y = "Tæthed", color = "Df") + scale_y_continuous(breaks = seq(0, 5, by = 0.5), minor_breaks = seq(0, 5, by = 0.5)) + scale_x_continuous(breaks = seq(-2.5, 0.5, by = 0.5), minor_breaks = seq(-2.5, 0.5, by = 0.5), limits = c(-2.5, 0.8) ) + scale_color_manual(values = c("10" = "blue", "5" = "red", "3" = "#808000")) +theme(legend.position = "none")
+
+# Power
+Test2p5 <- c1(quantile(f13Test2_H0, probs = 0.04043))
+Test2p6 <- c2(quantile(f13Test2_H0, probs = 0.04043))
+Test2p7 <- c1(quantile(f13Test2_H0, probs = 0.10682))
+Test2p8 <- c2(quantile(f13Test2_H0, probs = 0.10682))
+
+cdf / pdf + plot_layout(heights = c(2, 1))
+```
+
+# Figur 13 - Test 3
+
+```{r}
+# For Z3 med fixed VaR og forskellige df'er
+f13Test3_H0 <- Z3_sim(10, 10)
+f13Test3_H1 <- Z3_sim(10, 5)
+f13Test3_H2 <- Z3_sim(10, 3)
+
+# Plot CDF
+n <- 1000
+c0 <- ecdf(f13Test3_H0)
+c1 <- ecdf(f13Test3_H1)
+c2 <- ecdf(f13Test3_H2)
+
+x <- seq(-2.1, 0.3, length.out = n)
+
+cdf_data <- data.frame(x = x, y = c(c0(x), 1 - c1(x), 1 - c2(x)),
+                       df = rep(c("10", "5", "3"), each = n))
+
+green5 <- quantile(f13Test3_H0, probs = 0.05)
+green10 <- quantile(f13Test3_H0, probs = 0.10)
+black5 <- quantile(f13Test3_H0, probs = 0.04043)
+black10 <- quantile(f13Test3_H0, probs = 0.10682)
+
+lines <- tibble(lines = c(green5, green10, black5, black10), group = c("green", "green", "black", "black"))
+
+cdf <- ggplot(cdf_data, aes(x = x, y = y, color = df)) +
+  geom_line(linewidth = 1) + geom_vline(data = lines, aes(xintercept = lines, color = group)) +
+  labs(title = "ES2.5% | Test3",x = "", y = "Fordeling", color = "Df") + scale_y_continuous(breaks = seq(0, 1, by = 0.1), minor_breaks = seq(0, 1, by = 0.1)) + scale_x_continuous(breaks = seq(-2, 0, by = 0.5), minor_breaks = seq(-2, 0, by = 0.5), limits = c(-2.1,0.3) ) + scale_color_manual(values = c("10" = "blue", "5" = "red", "3" = "#808000", "green" = "green", "black" = "black"))+theme(legend.position = "none")
+
+# Plot PDF
+d0 <- density(f13Test3_H0, n = n)
+d1 <- density(f13Test3_H1, n = n)
+d2 <- density(f13Test3_H2, n = n)
+
+pdf_data <- data.frame(x = c(d0$x, d1$x, d2$x), y = c(d0$y, d1$y, d2$y),
+                       df = rep(c("10", "5", "3"), each = n))
+
+pdf <- ggplot(pdf_data, aes(x = x, y = y, color = df)) +
+  geom_line(linewidth = 1) + labs(title = "", x = "", y = "Tæthed", color = "Df") + scale_y_continuous(breaks = seq(0, 5, by = 1), minor_breaks = seq(0, 5, by = 1)) + scale_x_continuous(breaks = seq(-2, 0, by = 0.5), minor_breaks = seq(-2, 0, by = 0.5), limits = c(-2.1,0.3) ) + scale_color_manual(values = c("10" = "blue", "5" = "red", "3" = "#808000")) +theme(legend.position = "none")
+
+# Power
+Test3p5 <- c1(quantile(f13Test3_H0, probs = 0.04043))
+Test3p6 <- c2(quantile(f13Test3_H0, probs = 0.04043))
+Test3p7 <- c1(quantile(f13Test3_H0, probs = 0.10682))
+Test3p8 <- c2(quantile(f13Test3_H0, probs = 0.10682))
+
+cdf / pdf + plot_layout(heights = c(2, 1))
+```
+
+# 'Figur 13' - Test 4
+
+```{r}
+# For Z4 med fixed VaR og forskellige df'er
+f13Test4_H0 <- Z4_sim(10, 10)
+f13Test4_H1 <- Z4_sim(10, 5)
+f13Test4_H2 <- Z4_sim(10, 3)
+
+# Plot CDF
+n <- 1000
+c0 <- ecdf(f13Test4_H0)
+c1 <- ecdf(f13Test4_H1)
+c2 <- ecdf(f13Test4_H2)
+
+x <- seq(-2.1, 0.3, length.out = n)
+
+cdf_data <- data.frame(x = x, y = c(c0(x), 1 - c1(x), 1 - c2(x)),
+                       df = rep(c("10", "5", "3"), each = n))
+
+green5 <- quantile(f13Test4_H0, probs = 0.05)
+green10 <- quantile(f13Test4_H0, probs = 0.10)
+black5 <- quantile(f13Test4_H0, probs = 0.04043)
+black10 <- quantile(f13Test4_H0, probs = 0.10682)
+
+lines <- tibble(lines = c(green5, green10, black5, black10), group = c("green", "green", "black", "black"))
+
+cdf <- ggplot(cdf_data, aes(x = x, y = y, color = df)) +
+  geom_line(linewidth = 1) + geom_vline(data = lines, aes(xintercept = lines, color = group)) +
+  labs(title = "ES2.5% | Test4",x = "", y = "Fordeling", color = "Df") + scale_y_continuous(breaks = seq(0, 1, by = 0.1), minor_breaks = seq(0, 1, by = 0.1)) + scale_x_continuous(breaks = seq(-2, 0, by = 0.5), minor_breaks = seq(-2, 0, by = 0.5), limits = c(-2.1,0.3) ) + scale_color_manual(values = c("10" = "blue", "5" = "red", "3" = "#808000", "green" = "green", "black" = "black"))+theme(legend.position = "none")
+
+# Plot PDF
+d0 <- density(f13Test4_H0, n = n)
+d1 <- density(f13Test4_H1, n = n)
+d2 <- density(f13Test4_H2, n = n)
+
+pdf_data <- data.frame(x = c(d0$x, d1$x, d2$x), y = c(d0$y, d1$y, d2$y),
+                       df = rep(c("10", "5", "3"), each = n))
+
+pdf <- ggplot(pdf_data, aes(x = x, y = y, color = df)) +
+  geom_line(linewidth = 1) + labs(title = "", x = "", y = "Tæthed", color = "Df") + scale_y_continuous(breaks = seq(0, 5, by = 1), minor_breaks = seq(0, 5, by = 1)) + scale_x_continuous(breaks = seq(-2, 0, by = 0.5), minor_breaks = seq(-2, 0, by = 0.5), limits = c(-2.1,0.3) ) + scale_color_manual(values = c("10" = "blue", "5" = "red", "3" = "#808000")) +theme(legend.position = "none")
+
+# Power
+Test4p5 <- c1(quantile(f13Test4_H0, probs = 0.04043))
+Test4p6 <- c2(quantile(f13Test4_H0, probs = 0.04043))
+Test4p7 <- c1(quantile(f13Test4_H0, probs = 0.10682))
+Test4p8 <- c2(quantile(f13Test4_H0, probs = 0.10682))
+
+cdf / pdf + plot_layout(heights = c(2, 1))
+```
+
+## Figur 13 - numExceedances
+
+```{r}
+# For numExceedances med fixed VaR og forskellige df'er
+f13numExceedances_H0 <- numExceedances_sim(10, 10)
+f13numExceedances_H1 <- numExceedances_sim(10, 5)
+f13numExceedances_H2 <- numExceedances_sim(10, 3)
+
+#sig-niveau
+f <- function(p) {
+  quantile(f13numExceedances_H0, probs = p)
+}
+p6_value <- seq(0.038, 0.05, length.out = 10000)
+f6_values <- sapply(p6_value, f)
+valid_p6 <- p6_value[f6_values == -6]
+p6 <- round(max(valid_p6), 6)
+p6
+
+p5_value <- seq(0.1035, 0.115, length.out = 10000)
+f5_values <- sapply(p5_value, f)
+valid_p5 <- p5_value[f5_values == -5]
+p5 <- round(max(valid_p5), 6)
+p5
+
+# Plot CDF
+n <- 1000
+c0 <- ecdf(f13numExceedances_H0)
+c1 <- ecdf(f13numExceedances_H1)
+c2 <- ecdf(f13numExceedances_H2)
+
+x <- seq(-10, 0, length.out = n)
+
+cdf_data <- data.frame(x = x, y = c(c0(x), 1 - c1(x), 1 - c2(x)),
+                       df = rep(c("10", "5", "3"), each = n))
+
+black5 <- quantile(f13numExceedances_H0, probs =0.04043)
+black10 <- quantile(f13numExceedances_H0, probs = 0.10682)
+
+lines <- tibble(lines = c(black5, black10), group = c("black", "black"))
+
+cdf <- ggplot(cdf_data, aes(x = x, y = y, color = df)) +
+  geom_line(linewidth = 1) + geom_vline(data = lines, aes(xintercept = lines, color = group)) +
+  labs(title = "VaR1% | numExceedances",x = "", y = "Fordeling", color = "Df") + scale_y_continuous(breaks = seq(0, 1, by = 0.1), minor_breaks = seq(0, 1, by = 0.1)) + scale_x_continuous(breaks = seq(-10, 0, by = 1), minor_breaks = seq(-10, 0, by = 1), limits = c(-10,0)) + scale_color_manual(values = c("10" = "blue", "5" = "red", "3" = "#808000", "black" = "black"))+theme(legend.position = "none")
+
+# Plot PDF
+d0 <- density(f13numExceedances_H0, n = n)
+d1 <- density(f13numExceedances_H1, n = n)
+d2 <- density(f13numExceedances_H2, n = n)
+
+pdf_data <- data.frame(x = c(d0$x, d1$x, d2$x), y = c(d0$y, d1$y, d2$y),
+                       df = rep(c("10", "5", "3"), each = n))
+
+pdf <- ggplot(pdf_data, aes(x = x, y = y, color = df)) +
+  geom_line(linewidth = 1) + labs(title = "", x = "", y = "Tæthed", color = "Df") + scale_y_continuous(breaks = seq(0, 5, by = 0.5), minor_breaks = seq(0, 5, by = 0.5)) + scale_x_continuous(breaks = seq(-10, 0, by = 1), minor_breaks = seq(-10, 0, by = 1), limits = c(-10,0)) + scale_color_manual(values = c("10" = "blue", "5" = "red", "3" = "#808000"))  
+
+# Power
+numEp5 <- c1(quantile(f13numExceedances_H0, probs =0.04043 ))
+numEp6 <- c2(quantile(f13numExceedances_H0, probs =0.04043 ))
+numEp7 <- c1(quantile(f13numExceedances_H0, probs =0.10682 ))
+numEp8 <- c2(quantile(f13numExceedances_H0, probs =0.10682 ))
+
+cdf / pdf + plot_layout(heights = c(2, 1))
+```
+
+## Øvre del af Tabel 3
+
+```{r}
+sig <- c(rep(4.1,2), rep(10.7,2), rep(4.3,2), rep(10.9,2))
+df0 <- c(rep(10,4), rep(100,4))
+df1 <- c(rep(c(5,3),2), rep(c(10,3),2))
+
+Test1p <- c(Test1p5,Test1p6, Test1p7, Test1p8, Test1p1, Test1p2, Test1p3, Test1p4)
+Test2p <- c(Test2p5,Test2p6, Test2p7, Test2p8, Test2p1, Test2p2, Test2p3, Test2p4)
+Test3p <- c(Test3p5,Test3p6, Test3p7, Test3p8, Test3p1, Test3p2, Test3p3, Test3p4)
+Test4p <- c(Test4p5,Test4p6, Test4p7, Test4p8, Test4p1, Test4p2, Test4p3, Test4p4)
+numEp <- c(numEp5, numEp6, numEp7, numEp8, numEp1, numEp2, numEp3, numEp4)
+
+Table <- data.frame(cbind("v(H0)" = df0, "Signifikans_niveau" = sig, "v(H1)" = df1, "Z1" = Test1p*100, "Z2" = Test2p*100, "Z3" = Test3p*100, "Z4" = Test4p*100, "VaR1" = numEp*100))
+print(Table)
+```
+
+
+# Figur '14' og '15'
+
+```{r}
+Z1_sim <- function(df0, df1) {
+  T <- 250
+  M <- 10^5
+  alpha <- 0.025
+  ES <- -integrate(function(q) qstd(q, 0, 1, df0), 0, alpha)$value/alpha
+  VaR <- -qstd(alpha, 0, 1, df0)
+  diff <- qstd(alpha, 0, 1, df0)-qstd(alpha, 0, 1, df1)  
+  Z <- vector("numeric", N)
+  set.seed(4652374)
+  for (j in 1:N) {
+    Xt <- rstd(T, 0, 1, df1)+diff
+    Z[j] <- sum(Xt*(Xt + VaR < 0)/ES)/(ifelse(sum((Xt + VaR < 0)) > 0, sum((Xt + VaR < 0)), 1))+1
+  }
+  return(Z)
+}
+
+Z2_sim <- function(df0, df1) {
+  T <- 250
+  N <- 10^5
+  alpha <- 0.025
+  ES <- -integrate(function(q) qstd(q, 0, 1, df0), 0, alpha)$value/alpha
+  VaR <- -qstd(alpha, 0, 1, df0)
+  diff <- qstd(alpha, 0, 1, df0)-qstd(alpha, 0, 1, df1)
+  num <- T*alpha*ES
+  Z <- vector("numeric", N)
+  set.seed(4652374)
+  for (j in 1:N) {
+    Xt <- rstd(T, 0, 1, df1)+diff
+    Z[j] <- sum(Xt*(Xt + VaR < 0))/(num) + 1
+  }
+  return(Z)}
+
+Z3_sim <- function(df0,df1) {
+  T <- 250
+  N <- 10^5
+  alpha <- 0.025
+  diff <- qstd(alpha, 0, 1, df0)-qstd(alpha, 0, 1, df1)
+  integer <- floor(T*alpha)
+  Z <- vector("numeric", N)
+  set.seed(4652374)
+  for (j in 1:N){
+    lowestXt <- sort(rstd(T, 0, 1, df1) + diff)[1:integer]
+    ESestimator <- -1/integer*sum(lowestXt)
+    integrale <- integrate(function(q) pbeta(1-q,T-integer,integer)*qstd(q, 0, 1, df0),0, 1)$value
+    EVanalytical <- -integrale*(T/integer)
+    
+    Z[j] <- -(ESestimator/EVanalytical)+1
+  }
+  return(Z)}
+
+
+Z4_sim <- function(df0, df1) {
+  T <- 250
+  N <- 10^5
+  alpha <- 0.025
+  ES <- -integrate(function(q) qstd(q, 0, 1, df0), 0, alpha)$value/alpha
+  VaR <- -qstd(alpha, 0, 1, df0)
+  diff <- qstd(alpha, 0, 1, df0)-qstd(alpha, 0, 1, df1)
+  num <- T*alpha*ES
+  Z <- vector("numeric", N)
+  set.seed(4652374)
+  for (j in 1:N) {
+    Xt <- rstd(T, 0, 1, df1) + diff
+    Z[j] <- sum((alpha*(-VaR)+(Xt+VaR)*(Xt + VaR < 0))/(num)) + 1
+  }
+  return(Z)}
+
+
+numExceedances_sim <- function(df0, df1){
+  T <- 250
+  N <- 10^5
+  alpha <- 0.025
+  beta <- 0.01
+  VaR <- -qstd(beta, 0, 1, df0)
+  diff <- qstd(alpha, 0, 1, df0)-qstd(alpha, 0, 1, df1)
+  Exceedance <- vector("numeric", N)
+  set.seed(4652374)
+  for (j in 1:N){
+    Xt <- rstd(T, 0, 1, df1) + diff
+    Exceedance[j] <- -sum((Xt + VaR < 0))
+  }
+  return(Exceedance)}
+
+```
+
+# Figur 14 - Test 1
+
+```{r}
+# For Z2 med fixed VaR og forskellige df'er
+f14Test1_H0 <- Z1_sim(100, 100)
+f14Test1_H1 <- Z1_sim(100, 10)
+f14Test1_H2 <- Z1_sim(100, 5)
+f14Test1_H3 <- Z1_sim(100, 3)
+
+# Plot CDF
+n <- 1000
+c0 <- ecdf(f14Test1_H0)
+c1 <- ecdf(f14Test1_H1)
+c2 <- ecdf(f14Test1_H2)
+c3 <- ecdf(f14Test1_H3)
+
+x <- seq(-1.5, 0.15, length.out = n)
+
+cdf_data <- data.frame(x = x, y = c(c0(x), 1 - c1(x), 1 - c2(x), 1 - c3(x)),
+                       df = rep(c("100", "10", "5", "3"), each = n))
+
+green5 <- quantile(f14Test1_H0, probs = 0.05)
+green10 <- quantile(f14Test1_H0, probs = 0.10)
+black5 <- quantile(f14Test1_H0, probs = 0.04174)
+black10 <- quantile(f14Test1_H0, probs = 0.10786)
+
+lines <- tibble(lines = c(green5, green10, black5, black10), group = c("green", "green", "black", "black"))
+
+cdf <- ggplot(cdf_data, aes(x = x, y = y, color = df)) +
+  geom_line(linewidth = 1) + geom_vline(data = lines, aes(xintercept = lines, color = group)) +
+  labs(title = "ES2.5% | Test1",x = "", y = "Fordeling", color = "Df") + scale_y_continuous(breaks = seq(0, 1, by = 0.1), minor_breaks = seq(0, 1, by = 0.1)) + scale_x_continuous(breaks = seq(-2.5, 0.5, by = 0.5), minor_breaks = seq(-2.5, 0.5, by = 0.5), limits = c(-1.5, 0.15) ) + scale_color_manual(values = c("100" = "blue", "10" = "red", "5" = "#808000", "3" = "darkred", "green" = "green", "black" = "black"))+theme(legend.position = "none")
+
+# Plot PDF
+d0 <- density(f14Test1_H0, n = n)
+d1 <- density(f14Test1_H1, n = n)
+d2 <- density(f14Test1_H2, n = n)
+d3 <- density(f14Test1_H3, n = n)
+
+pdf_data <- data.frame(x = c(d0$x, d1$x, d2$x, d3$x), y = c(d0$y, d1$y, d2$y, d3$y),
+                       df = rep(c("100", "10", "5", "3"), each = n))
+
+pdf <- ggplot(pdf_data, aes(x = x, y = y, color = df)) +
+  geom_line(linewidth = 1) + labs(title = "", x = "", y = "Tæthed", color = "Df") + scale_y_continuous(breaks = seq(0, 7, by = 2), minor_breaks = seq(0, 7, by = 2)) + scale_x_continuous(breaks = seq(-2.5, 0.5, by = 0.5), minor_breaks = seq(-2.5, 0.5, by = 0.5), limits = c(-1.5, 0.15) ) + scale_color_manual(values = c("100" = "blue", "10" = "red", "5" = "#808000", "3" = "darkred"))+theme(legend.position = "none")
+
+# Power
+Test1p1 <- c1(quantile(f14Test1_H0, probs = 0.04174))
+Test1p2 <- c3(quantile(f14Test1_H0, probs = 0.04174))
+Test1p3 <- c1(quantile(f14Test1_H0, probs = 0.10786))
+Test1p4 <- c3(quantile(f14Test1_H0, probs = 0.10786))
+
+cdf / pdf + plot_layout(heights = c(2, 1))
+```
+
+# Figur 14 - Test 2
+
+```{r}
+# For Z2 med fixed VaR og forskellige df'er
+f14Test2_H0 <- Z2_sim(100, 100)
+f14Test2_H1 <- Z2_sim(100, 10)
+f14Test2_H2 <- Z2_sim(100, 5)
+f14Test2_H3 <- Z2_sim(100, 3)
+
+# Plot CDF
+n <- 1000
+c0 <- ecdf(f14Test2_H0)
+c1 <- ecdf(f14Test2_H1)
+c2 <- ecdf(f14Test2_H2)
+c3 <- ecdf(f14Test2_H3)
+
+x <- seq(-3, 0.8, length.out = n)
+
+cdf_data <- data.frame(x = x, y = c(c0(x), 1 - c1(x), 1 - c2(x), 1 - c3(x)),
+                       df = rep(c("100", "10", "5", "3"), each = n))
+
+green5 <- quantile(f14Test2_H0, probs = 0.05)
+green10 <- quantile(f14Test2_H0, probs = 0.10)
+black5 <- quantile(f14Test2_H0, probs = 0.04174)
+black10 <- quantile(f14Test2_H0, probs = 0.10786)
+
+lines <- tibble(lines = c(green5, green10, black5, black10), group = c("green", "green", "black", "black"))
+
+cdf <- ggplot(cdf_data, aes(x = x, y = y, color = df)) +
+  geom_line(linewidth = 1) + geom_vline(data = lines, aes(xintercept = lines, color = group)) +
+  labs(title = "ES2.5% | Test2",x = "", y = "Fordeling", color = "Df") + scale_y_continuous(breaks = seq(0, 1, by = 0.1), minor_breaks = seq(0, 1, by = 0.1)) + scale_x_continuous(breaks = seq(-2.5, 0.5, by = 0.5), minor_breaks = seq(-2.5, 0.5, by = 0.5), limits = c(-3,0.8) ) + scale_color_manual(values = c("100" = "blue", "10" = "red", "5" = "#808000", "3" = "darkred", "green" = "green", "black" = "black"))+theme(legend.position = "none")
+
+# Plot PDF
+d0 <- density(f14Test2_H0, n = n)
+d1 <- density(f14Test2_H1, n = n)
+d2 <- density(f14Test2_H2, n = n)
+d3 <- density(f14Test2_H3, n = n)
+
+pdf_data <- data.frame(x = c(d0$x, d1$x, d2$x, d3$x), y = c(d0$y, d1$y, d2$y, d3$y),
+                       df = rep(c("100", "10", "5", "3"), each = n))
+
+pdf <- ggplot(pdf_data, aes(x = x, y = y, color = df)) +
+  geom_line(linewidth = 1) + labs(title = "", x = "", y = "Tæthed", color = "Df") + scale_y_continuous(breaks = seq(0, 5, by = 0.5), minor_breaks = seq(0, 5, by = 0.5)) + scale_x_continuous(breaks = seq(-2.5, 0.5, by = 0.5), minor_breaks = seq(-2.5, 0.5, by = 0.5), limits = c(-3,0.8)) + scale_color_manual(values = c("100" = "blue", "10" = "red", "5" = "#808000", "3" = "darkred"))+theme(legend.position = "none")
+
+# Power
+Test2p1 <- c1(quantile(f14Test2_H0, probs = 0.04174))
+Test2p2 <- c3(quantile(f14Test2_H0, probs = 0.04174))
+Test2p3 <- c1(quantile(f14Test2_H0, probs = 0.10786))
+Test2p4 <- c3(quantile(f14Test2_H0, probs = 0.10786))
+
+cdf / pdf + plot_layout(heights = c(2, 1))
+```
+
+# Figur 14 - Test 3
+
+```{r}
+# For Z3 med fixed VaR og forskellige df'er
+f14Test3_H0 <- Z3_sim(100, 100)
+f14Test3_H1 <- Z3_sim(100, 10)
+f14Test3_H2 <- Z3_sim(100, 5)
+f14Test3_H3 <- Z3_sim(100, 3)
+
+# Plot CDF
+n <- 1000
+c0 <- ecdf(f14Test3_H0)
+c1 <- ecdf(f14Test3_H1)
+c2 <- ecdf(f14Test3_H2)
+c3 <- ecdf(f14Test3_H3)
+
+x <- seq(-2, 0.25, length.out = n)
+
+cdf_data <- data.frame(x = x, y = c(c0(x), 1 - c1(x), 1 - c2(x), 1 - c3(x)),
+                       df = rep(c("100", "10", "5", "3"), each = n))
+
+green5 <- quantile(f14Test3_H0, probs = 0.05)
+green10 <- quantile(f14Test3_H0, probs = 0.10)
+black5 <- quantile(f14Test3_H0, probs = 0.04174)
+black10 <- quantile(f14Test3_H0, probs = 0.10786)
+
+lines <- tibble(lines = c(green5, green10, black5, black10), group = c("green", "green", "black", "black"))
+
+cdf <- ggplot(cdf_data, aes(x = x, y = y, color = df)) +
+  geom_line(linewidth = 1) + geom_vline(data = lines, aes(xintercept = lines, color = group)) +
+  labs(title = "ES2.5% | Test3",x = "", y = "Fordeling", color = "Df") + scale_y_continuous(breaks = seq(0, 1, by = 0.1), minor_breaks = seq(0, 1, by = 0.1)) + scale_x_continuous(breaks = seq(-2.5, 0, by = 0.5), minor_breaks = seq(-2.5, 0, by = 0.5), limits = c(-2,0.25) ) + scale_color_manual(values = c("100" = "blue", "10" = "red", "5" = "#808000", "3" = "darkred", "green" = "green", "black" = "black"))+theme(legend.position = "none")
+
+# Plot PDF
+d0 <- density(f14Test3_H0, n = n)
+d1 <- density(f14Test3_H1, n = n)
+d2 <- density(f14Test3_H2, n = n)
+d3 <- density(f14Test3_H3, n = n)
+
+pdf_data <- data.frame(x = c(d0$x, d1$x, d2$x, d3$x), y = c(d0$y, d1$y, d2$y, d3$y),
+                       df = rep(c("100", "10", "5", "3"), each = n))
+
+pdf <- ggplot(pdf_data, aes(x = x, y = y, color = df)) +
+  geom_line(linewidth = 1) + labs(title = "", x = "", y = "Tæthed", color = "Df") + scale_y_continuous(breaks = seq(0, 5, by = 1), minor_breaks = seq(0, 5, by = 1)) + scale_x_continuous(breaks = seq(-2.5, 0, by = 0.5), minor_breaks = seq(-2.5, 0, by = 0.5), limits = c(-2,0.25) ) + scale_color_manual(values = c("100" = "blue", "10" = "red", "5" = "#808000", "3" = "darkred"))+theme(legend.position = "none")
+
+# Power
+Test3p1 <- c1(quantile(f14Test3_H0, probs = 0.04174))
+Test3p2 <- c3(quantile(f14Test3_H0, probs = 0.04174))
+Test3p3 <- c1(quantile(f14Test3_H0, probs = 0.10786))
+Test3p4 <- c3(quantile(f14Test3_H0, probs = 0.10786))
+
+cdf / pdf + plot_layout(heights = c(2, 1))
+```
+
+# 'Figur 14' - Test 4
+
+```{r}
+# For Z4 med fixed VaR og forskellige df'er
+f14Test4_H0 <- Z4_sim(100, 100)
+f14Test4_H1 <- Z4_sim(100, 10)
+f14Test4_H2 <- Z4_sim(100, 5)
+f14Test4_H3 <- Z4_sim(100, 3)
+
+# Plot CDF
+n <- 1000
+c0 <- ecdf(f14Test4_H0)
+c1 <- ecdf(f14Test4_H1)
+c2 <- ecdf(f14Test4_H2)
+c3 <- ecdf(f14Test4_H3)
+
+x <- seq(-2, 0.2, length.out = n)
+
+cdf_data <- data.frame(x = x, y = c(c0(x), 1 - c1(x), 1 - c2(x), 1 - c3(x)),
+                       df = rep(c("100", "10", "5", "3"), each = n))
+
+green5 <- quantile(f14Test4_H0, probs = 0.05)
+green10 <- quantile(f14Test4_H0, probs = 0.10)
+black5 <- quantile(f14Test4_H0, probs = 0.04174)
+black10 <- quantile(f14Test4_H0, probs = 0.10786)
+
+lines <- tibble(lines = c(green5, green10, black5, black10), group = c("green", "green", "black", "black"))
+
+cdf <- ggplot(cdf_data, aes(x = x, y = y, color = df)) +
+  geom_line(linewidth = 1) + geom_vline(data = lines, aes(xintercept = lines, color = group)) +
+  labs(title = "ES2.5% | Test4",x = "", y = "Fordeling", color = "Df") + scale_y_continuous(breaks = seq(0, 1, by = 0.1), minor_breaks = seq(0, 1, by = 0.1)) + scale_x_continuous(breaks = seq(-2.5, 0, by = 0.5), minor_breaks = seq(-2.5, 0, by = 0.5), limits = c(-2,0.2) ) + scale_color_manual(values = c("100" = "blue", "10" = "red", "5" = "#808000", "3" = "darkred", "green" = "green", "black" = "black"))+theme(legend.position = "none")
+
+# Plot PDF
+d0 <- density(f14Test4_H0, n = n)
+d1 <- density(f14Test4_H1, n = n)
+d2 <- density(f14Test4_H2, n = n)
+d3 <- density(f14Test4_H3, n = n)
+
+pdf_data <- data.frame(x = c(d0$x, d1$x, d2$x, d3$x), y = c(d0$y, d1$y, d2$y, d3$y),
+                       df = rep(c("100", "10", "5", "3"), each = n))
+
+pdf <- ggplot(pdf_data, aes(x = x, y = y, color = df)) +
+  geom_line(linewidth = 1) +
+  labs(title = "", x = "", y = "Tæthed", color = "Df") + scale_y_continuous(breaks = seq(0, 5, by = 1), minor_breaks = seq(0, 5, by = 1)) + scale_x_continuous(breaks = seq(-2.5, 0, by = 0.5), minor_breaks = seq(-2.5, 0, by = 0.5), limits = c(-2,0.2) ) + scale_color_manual(values = c("100" = "blue", "10" = "red", "5" = "#808000", "3" = "darkred")) +theme(legend.position = "none")
+
+# Power
+Test4p1 <- c1(quantile(f14Test4_H0, probs = 0.04174)) # 
+Test4p2 <- c3(quantile(f14Test4_H0, probs = 0.04174)) # 
+Test4p3 <- c1(quantile(f14Test4_H0, probs = 0.10786)) # 
+Test4p4 <- c3(quantile(f14Test4_H0, probs = 0.10786)) # 
+
+cdf / pdf + plot_layout(heights = c(2, 1))
+```
+
+## Figur 14 - numExceedances
+
+```{r}
+# For numExceedances med fixed VaR og forskellige df'er
+f14numExceedances_H0 <- numExceedances_sim(100, 100)
+f14numExceedances_H1 <- numExceedances_sim(100, 10)
+f14numExceedances_H2 <- numExceedances_sim(100, 5)
+f14numExceedances_H3 <- numExceedances_sim(100, 3)
+
+#sig-niveau
+f <- function(p) {
+  quantile(f14numExceedances_H0, probs = p)
+}
+p6_value <- seq(0.038, 0.05, length.out = 10000)
+f6_values <- sapply(p6_value, f)
+valid_p6 <- p6_value[f6_values == -6]
+p6 <- round(max(valid_p6), 6)
+p6
+
+p5_value <- seq(0.1035, 0.115, length.out = 10000)
+f5_values <- sapply(p5_value, f)
+valid_p5 <- p5_value[f5_values == -5]
+p5 <- round(max(valid_p5), 6)
+p5
+
+# Plot CDF
+n <- 1000
+c0 <- ecdf(f14numExceedances_H0)
+c1 <- ecdf(f14numExceedances_H1)
+c2 <- ecdf(f14numExceedances_H2)
+c3 <- ecdf(f14numExceedances_H3)
+
+x <- seq(-10, 0, length.out = n)
+
+cdf_data <- data.frame(x = x, y = c(c0(x), 1 - c1(x), 1 - c2(x), 1 - c3(x)),
+                       df = rep(c("100", "10", "5", "3"), each = n))
+
+black5 <- quantile(f14numExceedances_H0, probs = 0.04174)
+black10 <- quantile(f14numExceedances_H0, probs = 0.10786)
+
+lines <- tibble(lines = c(black5, black10), group = c("black", "black"))
+
+cdf <- ggplot(cdf_data, aes(x = x, y = y, color = df)) +
+  geom_line(linewidth = 1) + geom_vline(data = lines, aes(xintercept = lines, color = group)) + 
+  labs(title = "VaR1% | numExceedances",x = "", y = "Fordeling", color = "Df") + scale_y_continuous(breaks = seq(0, 1, by = 0.1), minor_breaks = seq(0, 1, by = 0.1)) + scale_x_continuous(breaks = seq(-10, 0, by = 1), minor_breaks = seq(-10, 0, by = 1), limits = c(-10,0)) + scale_color_manual(values = c("100" = "blue", "10" = "red", "5" = "#808000", "3"="darkred", "black" = "black"))+theme(legend.position = "none")
+
+# Plot PDF
+d0 <- density(f14numExceedances_H0, n = n)
+d1 <- density(f14numExceedances_H1, n = n)
+d2 <- density(f14numExceedances_H2, n = n)
+d3 <- density(f14numExceedances_H3, n = n)
+
+pdf_data <- data.frame(x = c(d0$x, d1$x, d2$x, d3$x), y = c(d0$y, d1$y, d2$y, d3$y),
+                       df = rep(c("100", "10", "5", "3"), each = n))
+
+pdf <- ggplot(pdf_data, aes(x = x, y = y, color = df)) +
+  geom_line(linewidth = 1) +
+  labs(title = "", x = "", y = "Tæthed", color = "Df") + scale_y_continuous(breaks = seq(0, 5, by = 0.5), minor_breaks = seq(0, 5, by = 0.5)) + scale_x_continuous(breaks = seq(-10, 0, by = 1), minor_breaks = seq(-10, 0, by = 1), limits = c(-10,0)) + scale_color_manual(values = c("100" = "blue", "10" = "red", "5" = "#808000", "3" = "darkred"))+theme(legend.position = "none")
+
+# Power
+numEp1 <- c1(quantile(f14numExceedances_H0, probs = 0.04174))
+numEp2 <- c3(quantile(f14numExceedances_H0, probs = 0.04174))
+numEp3 <- c1(quantile(f14numExceedances_H0, probs = 0.10786))
+numEp4 <- c3(quantile(f14numExceedances_H0, probs = 0.10786))
+
+cdf / pdf + plot_layout(heights = c(2, 1))
+```
+
+# Figur 15 - Test 1
+
+```{r}
+# For Z2 med fixed VaR og forskellige df'er
+f15Test1_H0 <- Z1_sim(10, 10)
+f15Test1_H1 <- Z1_sim(10, 5)
+f15Test1_H2 <- Z1_sim(10, 3)
+
+# Plot CDF
+n <- 1000
+c0 <- ecdf(f15Test1_H0)
+c1 <- ecdf(f15Test1_H1)
+c2 <- ecdf(f15Test1_H2)
+
+x <- seq(-1.5, 0.2, length.out = n)
+
+cdf_data <- data.frame(x = x, y = c(c0(x), 1 - c1(x), 1 - c2(x)),
+                       df = rep(c("10", "5", "3"), each = n))
+
+green5 <- quantile(f15Test1_H0, probs = 0.05)
+green10 <- quantile(f15Test1_H0, probs = 0.10)
+black5 <- quantile(f15Test1_H0, probs = 0.04043)
+black10 <- quantile(f15Test1_H0, probs = 0.10682)
+
+lines <- tibble(lines = c(green5, green10, black5, black10), group = c("green", "green", "black", "black"))
+
+cdf <- ggplot(cdf_data, aes(x = x, y = y, color = df)) +
+  geom_line(linewidth = 1) + geom_vline(data = lines, aes(xintercept = lines, color = group)) +
+  labs(title = "ES2.5% | Test1",x = "", y = "Fordeling", color = "Df") + scale_y_continuous(breaks = seq(0, 1, by = 0.2), minor_breaks = seq(0, 1, by = 0.2)) + scale_x_continuous(breaks = seq(-2.5, 0.5, by = 0.5), minor_breaks = seq(-2.5, 0.5, by = 0.5), limits = c(-1.5,0.2) ) + scale_color_manual(values = c("10" = "blue", "5" = "red", "3" = "#808000", "green" = "green", "black" = "black"))+theme(legend.position = "none")
+
+# Plot PDF
+d0 <- density(f15Test1_H0, n = n)
+d1 <- density(f15Test1_H1, n = n)
+d2 <- density(f15Test1_H2, n = n)
+
+pdf_data <- data.frame(x = c(d0$x, d1$x, d2$x), y = c(d0$y, d1$y, d2$y),
+                       df = rep(c("10", "5", "3"), each = n))
+
+pdf <- ggplot(pdf_data, aes(x = x, y = y, color = df)) +
+  geom_line(linewidth = 1) + labs(title = "", x = "", y = "Tæthed", color = "Df") + scale_y_continuous(breaks = seq(0, 5, by = 1), minor_breaks = seq(0, 5, by = 1)) + scale_x_continuous(breaks = seq(-2.5, 0.5, by = 0.5), minor_breaks = seq(-2.5, 0.5, by = 0.5), limits = c(-1.5,0.2)) + scale_color_manual(values = c("10" = "blue", "5" = "red", "3" = "#808000"))
+
+# Power
+Test1p5 <- c1(quantile(f15Test1_H0, probs = 0.04043))
+Test1p6 <- c2(quantile(f15Test1_H0, probs = 0.04043))
+Test1p7 <- c1(quantile(f15Test1_H0, probs = 0.10682))
+Test1p8 <- c2(quantile(f15Test1_H0, probs = 0.10682))
+
+cdf / pdf + plot_layout(heights = c(2, 1))
+```
+
+# Figur 15 - Test 2
+
+```{r}
+# For Z2 med fixed VaR og forskellige df'er
+f15Test2_H0 <- Z2_sim(10, 10)
+f15Test2_H1 <- Z2_sim(10, 5)
+f15Test2_H2 <- Z2_sim(10, 3)
+
+# Plot CDF
+n <- 1000
+c0 <- ecdf(f15Test2_H0)
+c1 <- ecdf(f15Test2_H1)
+c2 <- ecdf(f15Test2_H2)
+
+x <- seq(-2.5, 0.8, length.out = n)
+
+cdf_data <- data.frame(x = x, y = c(c0(x), 1 - c1(x), 1 - c2(x)),
+                       df = rep(c("10", "5", "3"), each = n))
+
+green5 <- quantile(f15Test2_H0, probs = 0.05)
+green10 <- quantile(f15Test2_H0, probs = 0.10)
+black5 <- quantile(f15Test2_H0, probs = 0.04043)
+black10 <- quantile(f15Test2_H0, probs = 0.10682)
+
+lines <- tibble(lines = c(green5, green10, black5, black10), group = c("green", "green", "black", "black"))
+
+cdf <- ggplot(cdf_data, aes(x = x, y = y, color = df)) +
+  geom_line(linewidth = 1) + geom_vline(data = lines, aes(xintercept = lines, color = group)) +
+  labs(title = "ES2.5% | Test2",x = "", y = "Fordeling", color = "Df") + scale_y_continuous(breaks = seq(0, 1, by = 0.1), minor_breaks = seq(0, 1, by = 0.1)) + scale_x_continuous(breaks = seq(-2.5, 0.5, by = 0.5), minor_breaks = seq(-2.5, 0.5, by = 0.5), limits = c(-2.5, 0.8) ) + scale_color_manual(values = c("10" = "blue", "5" = "red", "3" = "#808000", "green" = "green", "black" = "black"))+theme(legend.position = "none")
+
+# Plot PDF
+d0 <- density(f15Test2_H0, n = n)
+d1 <- density(f15Test2_H1, n = n)
+d2 <- density(f15Test2_H2, n = n)
+
+pdf_data <- data.frame(x = c(d0$x, d1$x, d2$x), y = c(d0$y, d1$y, d2$y),
+                       df = rep(c("10", "5", "3"), each = n))
+
+pdf <- ggplot(pdf_data, aes(x = x, y = y, color = df)) +
+  geom_line(linewidth = 1) + labs(title = "", x = "", y = "Tæthed", color = "Df") + scale_y_continuous(breaks = seq(0, 5, by = 0.5), minor_breaks = seq(0, 5, by = 0.5)) + scale_x_continuous(breaks = seq(-2.5, 0.5, by = 0.5), minor_breaks = seq(-2.5, 0.5, by = 0.5), limits = c(-2.5, 0.8) ) + scale_color_manual(values = c("10" = "blue", "5" = "red", "3" = "#808000")) +theme(legend.position = "none")
+
+# Power
+Test2p5 <- c1(quantile(f15Test2_H0, probs = 0.04043))
+Test2p6 <- c2(quantile(f15Test2_H0, probs = 0.04043))
+Test2p7 <- c1(quantile(f15Test2_H0, probs = 0.10682))
+Test2p8 <- c2(quantile(f15Test2_H0, probs = 0.10682))
+
+cdf / pdf + plot_layout(heights = c(2, 1))
+```
+
+# Figur 15 - Test 3
+
+```{r}
+# For Z3 med fixed VaR og forskellige df'er
+f15Test3_H0 <- Z3_sim(10, 10)
+f15Test3_H1 <- Z3_sim(10, 5)
+f15Test3_H2 <- Z3_sim(10, 3)
+
+# Plot CDF
+n <- 1000
+c0 <- ecdf(f15Test3_H0)
+c1 <- ecdf(f15Test3_H1)
+c2 <- ecdf(f15Test3_H2)
+
+x <- seq(-2.1, 0.3, length.out = n)
+
+cdf_data <- data.frame(x = x, y = c(c0(x), 1 - c1(x), 1 - c2(x)),
+                       df = rep(c("10", "5", "3"), each = n))
+
+green5 <- quantile(f15Test3_H0, probs = 0.05)
+green10 <- quantile(f15Test3_H0, probs = 0.10)
+black5 <- quantile(f15Test3_H0, probs = 0.04043)
+black10 <- quantile(f15Test3_H0, probs = 0.10682)
+
+lines <- tibble(lines = c(green5, green10, black5, black10), group = c("green", "green", "black", "black"))
+
+cdf <- ggplot(cdf_data, aes(x = x, y = y, color = df)) +
+  geom_line(linewidth = 1) + geom_vline(data = lines, aes(xintercept = lines, color = group)) +
+  labs(title = "ES2.5% | Test3",x = "", y = "Fordeling", color = "Df") + scale_y_continuous(breaks = seq(0, 1, by = 0.1), minor_breaks = seq(0, 1, by = 0.1)) + scale_x_continuous(breaks = seq(-2, 0, by = 0.5), minor_breaks = seq(-2, 0, by = 0.5), limits = c(-2.1,0.3) ) + scale_color_manual(values = c("10" = "blue", "5" = "red", "3" = "#808000", "green" = "green", "black" = "black"))+theme(legend.position = "none")
+
+# Plot PDF
+d0 <- density(f15Test3_H0, n = n)
+d1 <- density(f15Test3_H1, n = n)
+d2 <- density(f15Test3_H2, n = n)
+
+pdf_data <- data.frame(x = c(d0$x, d1$x, d2$x), y = c(d0$y, d1$y, d2$y),
+                       df = rep(c("10", "5", "3"), each = n))
+
+pdf <- ggplot(pdf_data, aes(x = x, y = y, color = df)) +
+  geom_line(linewidth = 1) + labs(title = "", x = "", y = "Tæthed", color = "Df") + scale_y_continuous(breaks = seq(0, 5, by = 1), minor_breaks = seq(0, 5, by = 1)) + scale_x_continuous(breaks = seq(-2, 0, by = 0.5), minor_breaks = seq(-2, 0, by = 0.5), limits = c(-2.1,0.3) ) + scale_color_manual(values = c("10" = "blue", "5" = "red", "3" = "#808000")) +theme(legend.position = "none")
+
+# Power
+Test3p5 <- c1(quantile(f15Test3_H0, probs = 0.04043))
+Test3p6 <- c2(quantile(f15Test3_H0, probs = 0.04043))
+Test3p7 <- c1(quantile(f15Test3_H0, probs = 0.10682))
+Test3p8 <- c2(quantile(f15Test3_H0, probs = 0.10682))
+
+cdf / pdf + plot_layout(heights = c(2, 1))
+```
+
+# 'Figur 15' - Test 4
+
+```{r}
+# For Z4 med fixed VaR og forskellige df'er
+f15Test4_H0 <- Z4_sim(10, 10)
+f15Test4_H1 <- Z4_sim(10, 5)
+f15Test4_H2 <- Z4_sim(10, 3)
+
+# Plot CDF
+n <- 1000
+c0 <- ecdf(f15Test4_H0)
+c1 <- ecdf(f15Test4_H1)
+c2 <- ecdf(f15Test4_H2)
+
+x <- seq(-2.1, 0.3, length.out = n)
+
+cdf_data <- data.frame(x = x, y = c(c0(x), 1 - c1(x), 1 - c2(x)),
+                       df = rep(c("10", "5", "3"), each = n))
+
+green5 <- quantile(f15Test4_H0, probs = 0.05)
+green10 <- quantile(f15Test4_H0, probs = 0.10)
+black5 <- quantile(f15Test4_H0, probs = 0.04043)
+black10 <- quantile(f15Test4_H0, probs = 0.10682)
+
+lines <- tibble(lines = c(green5, green10, black5, black10), group = c("green", "green", "black", "black"))
+
+cdf <- ggplot(cdf_data, aes(x = x, y = y, color = df)) +
+  geom_line(linewidth = 1) + geom_vline(data = lines, aes(xintercept = lines, color = group)) +
+  labs(title = "ES2.5% | Test4",x = "", y = "Fordeling", color = "Df") + scale_y_continuous(breaks = seq(0, 1, by = 0.1), minor_breaks = seq(0, 1, by = 0.1)) + scale_x_continuous(breaks = seq(-2, 0, by = 0.5), minor_breaks = seq(-2, 0, by = 0.5), limits = c(-2.1, 0.3) ) + scale_color_manual(values = c("10" = "blue", "5" = "red", "3" = "#808000", "green" = "green", "black" = "black"))+theme(legend.position = "none")
+
+# Plot PDF
+d0 <- density(f15Test4_H0, n = n)
+d1 <- density(f15Test4_H1, n = n)
+d2 <- density(f15Test4_H2, n = n)
+
+pdf_data <- data.frame(x = c(d0$x, d1$x, d2$x), y = c(d0$y, d1$y, d2$y),
+                       df = rep(c("10", "5", "3"), each = n))
+
+pdf <- ggplot(pdf_data, aes(x = x, y = y, color = df)) +
+  geom_line(linewidth = 1) + labs(title = "", x = "", y = "Tæthed", color = "Df") + scale_y_continuous(breaks = seq(0, 5, by = 1), minor_breaks = seq(0, 5, by = 1)) + scale_x_continuous(breaks = seq(-2, 0, by = 0.5), minor_breaks = seq(-2, 0, by = 0.5), limits = c(-2.1, 0.3) ) + scale_color_manual(values = c("10" = "blue", "5" = "red", "3" = "#808000")) +theme(legend.position = "none")
+
+# Power
+Test4p5 <- c1(quantile(f15Test4_H0, probs = 0.04043))
+Test4p6 <- c2(quantile(f15Test4_H0, probs = 0.04043))
+Test4p7 <- c1(quantile(f15Test4_H0, probs = 0.10682))
+Test4p8 <- c2(quantile(f15Test4_H0, probs = 0.10682))
+
+cdf / pdf + plot_layout(heights = c(2, 1))
+```
+
+## Figur 15 - numExceedances
+
+```{r}
+# For numExceedances med fixed VaR og forskellige df'er
+f15numExceedances_H0 <- numExceedances_sim(10, 10)
+f15numExceedances_H1 <- numExceedances_sim(10, 5)
+f15numExceedances_H2 <- numExceedances_sim(10, 3)
+
+#sig-niveau
+f <- function(p) {
+  quantile(f15numExceedances_H0, probs = p)
+}
+p6_value <- seq(0.038, 0.05, length.out = 10000)
+f6_values <- sapply(p6_value, f)
+valid_p6 <- p6_value[f6_values == -6]
+p6 <- round(max(valid_p6), 6)
+p6
+
+p5_value <- seq(0.1035, 0.115, length.out = 10000)
+f5_values <- sapply(p5_value, f)
+valid_p5 <- p5_value[f5_values == -5]
+p5 <- round(max(valid_p5), 6)
+p5
+
+# Plot CDF
+n <- 1000
+c0 <- ecdf(f15numExceedances_H0)
+c1 <- ecdf(f15numExceedances_H1)
+c2 <- ecdf(f15numExceedances_H2)
+
+x <- seq(-10, 0, length.out = n)
+
+cdf_data <- data.frame(x = x, y = c(c0(x), 1 - c1(x), 1 - c2(x)),
+                       df = rep(c("10", "5", "3"), each = n))
+
+black5 <- quantile(f15numExceedances_H0, probs = 0.04043)
+black10 <- quantile(f15numExceedances_H0, probs = 0.10682)
+
+lines <- tibble(lines = c(black5, black10), group = c("black", "black"))
+
+cdf <- ggplot(cdf_data, aes(x = x, y = y, color = df)) +
+  geom_line(linewidth = 1) + geom_vline(data = lines, aes(xintercept = lines, color = group)) +
+  labs(title = "VaR1% | numExceedances",x = "", y = "Fordeling", color = "Df") + scale_y_continuous(breaks = seq(0, 1, by = 0.1), minor_breaks = seq(0, 1, by = 0.1)) + scale_x_continuous(breaks = seq(-10, 0, by = 1), minor_breaks = seq(-10, 0, by = 1), limits = c(-10, 0)) + scale_color_manual(values = c("10" = "blue", "5" = "red", "3" = "#808000", "black" = "black"))+theme(legend.position = "none")
+
+# Plot PDF
+d0 <- density(f15numExceedances_H0, n = n)
+d1 <- density(f15numExceedances_H1, n = n)
+d2 <- density(f15numExceedances_H2, n = n)
+
+pdf_data <- data.frame(x = c(d0$x, d1$x, d2$x), y = c(d0$y, d1$y, d2$y),
+                       df = rep(c("10", "5", "3"), each = n))
+
+pdf <- ggplot(pdf_data, aes(x = x, y = y, color = df)) +
+  geom_line(linewidth = 1) + labs(title = "", x = "", y = "Tæthed", color = "Df") + scale_y_continuous(breaks = seq(0, 5, by = 0.5), minor_breaks = seq(0, 5, by = 0.5)) + scale_x_continuous(breaks = seq(-10, 0, by = 1), minor_breaks = seq(-10, 0, by = 1), limits = c(-10, 0)) + scale_color_manual(values = c("10" = "blue", "5" = "red", "3" = "#808000")) +theme(legend.position = "none")
+
+# Power
+numEp5 <- c1(quantile(f15numExceedances_H0, probs = 0.04043))
+numEp6 <- c2(quantile(f15numExceedances_H0, probs = 0.04043))
+numEp7 <- c1(quantile(f15numExceedances_H0, probs = 0.10682))
+numEp8 <- c2(quantile(f15numExceedances_H0, probs = 0.10682))
+
+cdf / pdf + plot_layout(heights = c(2, 1))
+```
+
+## Nedre del af Tabel 3
+
+```{r}
+sig <- c(rep(4.2,2), rep(11.4,2), rep(4.1,2), rep(11.1,2))
+df0 <- c(rep(10,4), rep(100,4))
+df1 <- c(rep(c(5,3),2), rep(c(10,3),2))
+
+Test1p <- c(Test1p5,Test1p6, Test1p7, Test1p8, Test1p1, Test1p2, Test1p3, Test1p4)
+Test2p <- c(Test2p5,Test2p6, Test2p7, Test2p8, Test2p1, Test2p2, Test2p3, Test2p4)
+Test3p <- c(Test3p5,Test3p6, Test3p7, Test3p8, Test3p1, Test3p2, Test3p3, Test3p4)
+Test4p <- c(Test4p5,Test4p6, Test4p7, Test4p8, Test4p1, Test4p2, Test4p3, Test4p4)
+numEp <- c(numEp5, numEp6, numEp7, numEp8, numEp1, numEp2, numEp3, numEp4)
+
+Table <- data.frame(cbind("v(H0)" = df0, "Signifikans_niveau" = sig, "v(H1)" = df1, "Z1" = Test1p*100, "Z2" = Test2p*100, "Z3" = Test3p*100, "Z4" = Test4p*100, "VaR1" = numEp*100))
+print(Table)
+```
+

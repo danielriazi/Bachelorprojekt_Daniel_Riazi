@@ -1,0 +1,872 @@
+---
+title: "GARCH ACERBI"
+author: "Daniel Riazi"
+output: html_document
+date: "2025-03-21"
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+library(rugarch)
+library(fGarch)
+library(ggplot2)
+library(scales)
+```
+
+```{r}
+Exceedance <- function(Xt, VaR){
+  return(-sum((Xt + VaR < 0)))
+}
+  
+Z2 <- function(Xt, VaR, ES, alpha) {
+  T <- length(Xt)
+  return(sum((Xt*(Xt < -VaR))/(T*alpha*ES))+1)
+}
+
+Z3 <- function(Xt, sigma, alpha, df){
+  T <- length(Xt)
+  integer <- floor(T*alpha)
+  
+  EVanalytical <- -(T/integer)*(integrate(function(x) {pbeta(1 - x, T - integer, integer)*qstd(x, 0, 1, df)}, 0, 1, subdivisions = 1000, rel.tol = 1e-6, stop.on.error = FALSE)$value*sigma)
+  
+  Ut <- pdist("std", Xt, 0, sigma, shape=df)
+  ESestimate <- numeric(T)
+  
+  for (t in 1:T){
+    Y <- qdist("std", Ut, 0, sigma[t], shape=df)
+    ESestimate[t] <- -(1/integer)*sum(sort(Y)[1:integer])
+  }
+  
+  return(-mean(ESestimate/EVanalytical)+1)
+}
+
+
+Z4 <- function(Xt, VaR, ES, alpha) {
+  T <- length(Xt)
+  return(sum((alpha*(-VaR)+(Xt+VaR)*(Xt + VaR < 0))/(T*alpha*ES))+1)
+}
+
+```
+
+# Student t-fordeling
+
+```{r}
+garch_path_h1 <- function(n.sim, n.start, omega, alpha1, beta1, Xt) {
+  N <- n.sim + n.start
+  sigma2t <- numeric(N)
+  
+  # Initialværdi
+  sigma2t[1] <- omega + beta1*omega/(1-alpha1-beta1)
+  
+  for (t in 2:N) {
+    sigma2t[t] <- omega + alpha1*(Xt[t-1])^2 + beta1*sigma2t[t-1]
+  }
+  return(list(Xt = Xt[(n.start+1):N], sigma2 = sigma2t[(n.start+1):N]))
+}
+
+garch_path <- function(n.sim, n.start, omega, alpha1, beta1, df) {
+  N <- n.sim + n.start
+  Xt <- numeric(N)
+  sigma2t <- numeric(N)
+  Zt <- rstd(N, 0, 1, nu = df)
+  
+  # Initialværdi
+  sigma2t[1] <- omega + beta1*omega/(1-alpha1-beta1)
+  Xt[1] <- sqrt(sigma2t[1])*Zt[1]
+  
+  for (t in 2:N) {
+    sigma2t[t] <- omega + alpha1*(Xt[t-1])^2 + beta1*sigma2t[t-1]
+    Xt[t] <- sqrt(sigma2t[t])*Zt[t]
+  }
+  return(list(X = Xt, Xt = Xt[(n.start+1):N], sigma2 = sigma2t[(n.start+1):N]))
+}
+    
+# H0  
+sim0 <- function(T, burnin, df, N, alpha, alpha1, beta1, omega) {
+  Z2_path <- matrix(0,N,1); Z3_path <- matrix(0,N,1); Z4_path <- matrix(0,N,1); Exceedance_path <- matrix(0,N,1)
+  set.seed(4652374)
+  for (i in 1:N) {
+    path_sim <- garch_path(T, burnin, omega, alpha1, beta1, df)
+    Xt <- as.numeric(path_sim$Xt)
+    sigma <- as.numeric(sqrt(path_sim$sigma2))
+    
+    VaR <- -sigma*qstd(alpha, 0, 1, df)
+    VaR1 <- -sigma*qstd(0.01, 0, 1, df)
+    ES <- -sigma*(integrate(function(q) qstd(q, 0, 1, df), 0, alpha)$value/alpha)
+    
+    Exceedance_path[i] <- Exceedance(Xt, VaR1)
+    Z2_path[i] <- Z2(Xt, VaR, ES, alpha)
+    Z3_path[i] <- Z3(Xt, sigma, alpha, df)
+    Z4_path[i] <- Z4(Xt, VaR, ES, alpha)
+  }
+  return(list(Z2 = Z2_path, Z3 = Z3_path, Z4 = Z4_path, Exceedance=Exceedance_path))
+}
+
+#H1
+sim1 <- function(T, burnin, df0, df1, N, alpha, alpha1, beta1, omega) {
+  Z2_path <- matrix(0,N,1); Z3_path <- matrix(0,N,1); Z4_path <- matrix(0,N,1); Exceedance_path <- matrix(0,N,1)
+  set.seed(4652374)
+  for (i in 1:N) {
+    path_sim1 <- garch_path(T, burnin, omega, alpha1, beta1, df1)
+    X <- path_sim1$X
+    Xt <- path_sim1$Xt
+    path_values <- garch_path_h1(T, burnin, omega, alpha1, beta1, X)
+    sigma <- as.numeric(sqrt(path_values$sigma2))
+    
+    VaR <- -sigma*qstd(alpha, 0, 1, df0)
+    VaR1 <- -sigma*qstd(0.01, 0, 1, df0)
+    ES <- -sigma*(integrate(function(q) qstd(q, 0, 1, df0), 0, alpha)$value/alpha)
+    
+    Exceedance_path[i] <- Exceedance(Xt, VaR1)
+    Z2_path[i] <- Z2(Xt, VaR, ES, alpha)
+    Z3_path[i] <- Z3(Xt, sigma, alpha, df0)
+    Z4_path[i] <- Z4(Xt, VaR, ES, alpha)
+  }
+  return(list(Z2 = Z2_path, Z3 = Z3_path, Z4 = Z4_path, Exceedance=Exceedance_path))
+}
+  
+# df værdier 
+df_values <- c(1000, 100, 50, 30, 20, 15, 12, 10, 9, 8, 7, 6, 5, 4, 3)
+power_data <- matrix(0,length(df_values),4)
+
+Number <- seq(1,length(df_values), by = 1)
+  
+simH0 <- sim0(T = 250, burnin = 1000, df=100, N=10^4, alpha=0.025, alpha1=0.15, beta1=0.8, omega=0.01)
+
+# sig-niveau
+f <- function(p) {
+  quantile(simH0$Exceedance, probs = p, type = 1)
+}
+p_value <- seq(0.02, 0.05, length.out = 10000)
+f_values <- sapply(p_value, f)
+valid_p <- p_value[f_values == -6]
+p <- round(max(valid_p), 4)
+p
+
+for(df in Number){
+  simH1 <- sim1(T = 250, burnin = 1000, df0=100, df1 = df_values[df], N=10^4, alpha=0.025, alpha1=0.15, beta1=0.8, omega=0.01)
+  
+  power_data[df,] <- c(ecdf(simH1$Z2)(quantile(simH0$Z2, probs = 0.0401, type = 1)),
+                       ecdf(simH1$Z3)(quantile(simH0$Z3, probs = 0.0401, type = 1)),
+                       ecdf(simH1$Z4)(quantile(simH0$Z4, probs = 0.0401, type = 1)),
+                       ecdf(simH1$Exceedance)(quantile(simH0$Exceedance, probs = 0.0401, type = 1)))
+}
+
+
+plot_data1 <- data.frame(
+  df = as.factor(rep(df_values, times = 4)),
+  power = c(power_data[,1], power_data[,2], power_data[,3], power_data[,4]),
+  test = rep(c("Z2", "Z3", "Z4", "VaR1"), each = length(df_values))
+)
+
+plot_data1$df <- factor(plot_data1$df, levels = rev(levels(plot_data1$df)))
+ggplot(plot_data1, aes(x = df, y = power, color = test, shape = test, group = test)) +
+geom_vline(xintercept = 2, linetype = "solid", color = "darkgrey") +
+  geom_point(size = 3) +
+  geom_line() +
+  scale_shape_manual(values = c(16, 17, 15, 18)) +
+  scale_color_manual(values = c('darkgreen', 'blue', 'red', 'purple')) +
+  scale_y_continuous(limits = c(0, 0.75)) +
+  scale_x_discrete(breaks = unique(plot_data1$df)) +
+  labs(
+    x = "Antal frihedsgrader",
+    y = "Power",
+    title = "Ændre antallet af frihedsgrader",
+    color = "Teststørrelse",
+    shape = "Teststørrelse"
+  ) + theme_minimal() + theme(panel.grid.major.x = element_blank())
+
+
+```
+
+#Plot under H0 for frihedsgrader
+
+```{r}
+# Parametre
+T <- 250
+burnin <- 1000
+df  <- 100
+alpha <- 0.025
+alpha1 <- 0.15
+beta1 <- 0.8 
+omega <- 0.01
+
+# Simulér
+set.seed(4652374)
+path_sim <- garch_path(T, burnin, omega, alpha1, beta1, df)
+Xt <- as.numeric(path_sim$Xt)
+sigma <- as.numeric(sqrt(path_sim$sigma2))
+    
+VaR <- sigma*qstd(alpha, 0, 1, df)
+ES <- sigma*(integrate(function(q) qstd(q, 0, 1, df), 0, alpha)$value/alpha)
+
+exceedances <- as.numeric(Xt[1:T] < VaR)
+
+df_plot <- data.frame(
+  t        = 1:T,
+  returns  = Xt[1:T],
+  VaR      = VaR,  
+  ES       = ES,
+  exceed   = exceedances
+)
+
+# Plot 
+ggplot(df_plot, aes(x = t)) +
+  geom_line(aes(y = returns, color = "Afkastrate")) +
+  geom_line(aes(y = VaR, color = "VaR"), linetype = "solid") +
+  geom_line(aes(y = ES, color = "ES"), linetype = "solid") +
+  geom_point(
+    data = subset(df_plot, exceed == 1),
+    aes(y = returns, color = "Overskridelse af VaR"),
+    size = 2) + scale_color_manual( name = "Størrelser", values = c("Afkastrate" = "black", "VaR" = "red", "ES" = "blue", "Overskridelse af VaR" = "red")) +
+  labs(title = "", x = "t", y = "Xt") + theme_minimal()
+
+```
+
+# Plot under H1 for frihedsgrader
+
+```{r}
+# Parametre
+T <- 250
+burnin <- 2000
+df0  <- 100
+df1 <- 5
+alpha <- 0.025
+alpha1 <- 0.15 
+beta1 <- 0.8 
+omega <- 0.01
+
+# Simulér
+set.seed(4652374)
+path_sim1 <- garch_path(T, burnin, omega, alpha1, beta1, df1)
+X <- path_sim1$X
+Xt <- path_sim1$Xt
+sigmaH1 <- as.numeric(sqrt(path_sim1$sigma2))
+
+path_values <- garch_path_h1(T, burnin, omega, alpha1, beta1, X)
+sigmaH0 <- as.numeric(sqrt(path_values$sigma2))
+
+ESH1 <- sigmaH0*(integrate(function(q) qstd(q, 0, 1, df0), 0, alpha)$value/alpha)
+
+ES_real <- sigmaH1*(integrate(function(q) qstd(q, 0, 1, df1), 0, alpha)$value/alpha)
+
+VaRH1 <- sigmaH0*qstd(0.025, 0, 1, df0)
+
+VaR_real <- sigmaH1*qstd(0.025, 0, 1, df1)
+
+df1_plot <- data.frame(
+  t        = 1:T,
+  returns  = Xt[1:T],
+  ESH1     = ESH1,
+  ES_real     = ES_real
+)
+
+ggplot(df1_plot, aes(x = t)) +
+  geom_line(aes(y = returns, color = "Afkast")) +
+  geom_line(aes(y = ESH1, color = "ES H1"), linetype = "dashed") +
+  geom_line(aes(y = ES_real, color = "Reelle ES"), linetype = "solid") +
+  scale_color_manual(
+    name = "Størrelser",
+    values = c(
+      "Afkast"  = "black",
+      "ES H1"   = "blue",
+      "Reelle ES"   = "lightblue"
+    )) +
+  labs(title = "", x = "Tid (t)", y = "Xt") 
++ theme_minimal()  + theme(legend.position = "none")
+
+df1_plot1 <- data.frame(
+  t        = 1:T,
+  returns  = Xt[1:T],
+  VaRH1     = VaRH1,
+  VaR_real     = VaR_real
+)
+
+ggplot(df1_plot1, aes(x = t)) +
+  geom_line(aes(y = returns, color = "Afkast")) +
+  geom_line(aes(y = VaRH1, color = "ES H1"), linetype = "dashed") +
+  geom_line(aes(y = VaR_real, color = "Reelle ES"), linetype = "solid") +
+  scale_color_manual(
+    name = "Størrelser",
+    values = c(
+      "Afkast"  = "black",
+      "ES H1"   = "blue",
+      "Reelle ES"   = "lightblue")) + labs(title = "", x = "Tid (t)", y = "Xt") 
++ theme_minimal()  + theme(legend.position = "none")
+```
+
+
+# Ubetinget varians
+
+```{r}
+garch_path_h1 <- function(n.sim, n.start, omega, alpha1, beta1, Xt) {
+  N <- n.sim + n.start
+  sigma2t <- numeric(N)
+  
+  # Initialværdi
+  sigma2t[1] <- omega + beta1*omega/(1-alpha1-beta1)
+  
+  for (t in 2:N) {
+    sigma2t[t] <- omega + alpha1*(Xt[t-1])^2 + beta1*sigma2t[t-1]
+  }
+  return(list(Xt = Xt[(n.start+1):N], sigma2 = sigma2t[(n.start+1):N]))
+}
+
+garch_path <- function(n.sim, n.start, omega, alpha1, beta1, df) {
+  N <- n.sim + n.start
+  Xt <- numeric(N)
+  sigma2t <- numeric(N)
+  Zt <- rstd(N, 0, 1, nu = df)
+  
+  # Initialværdi
+  sigma2t[1] <- omega + beta1*omega/(1-alpha1-beta1)
+  Xt[1] <- sqrt(sigma2t[1])*Zt[1]
+  
+  for (t in 2:N) {
+    sigma2t[t] <- omega + alpha1*(Xt[t-1])^2 + beta1*sigma2t[t-1]
+    Xt[t] <- sqrt(sigma2t[t])*Zt[t]
+  }
+  return(list(X = Xt, Xt = Xt[(n.start+1):N], sigma2 = sigma2t[(n.start+1):N]))
+}
+    
+# H0  
+sim0 <- function(T, burnin, df, N, alpha, alpha1, beta1, omega) {
+  Z2_path <- matrix(0,N,1); Z3_path <- matrix(0,N,1); Z4_path <- matrix(0,N,1); Exceedance_path <- matrix(0,N,1)
+  set.seed(4652374)
+  for (i in 1:N) {
+    path_sim <- garch_path(T, burnin, omega, alpha1, beta1, df)
+    Xt <- as.numeric(path_sim$Xt)
+    sigma <- as.numeric(sqrt(path_sim$sigma2))
+    
+    VaR <- -sigma*qstd(alpha, 0, 1, df)
+    VaR1 <- -sigma*qstd(0.01, 0, 1, df)
+    ES <- -sigma*(integrate(function(q) qstd(q, 0, 1, df), 0, alpha)$value/alpha)
+    
+    Exceedance_path[i] <- Exceedance(Xt, VaR1)
+    Z2_path[i] <- Z2(Xt, VaR, ES, alpha)
+    Z3_path[i] <- Z3(Xt, sigma, alpha, df)
+    Z4_path[i] <- Z4(Xt, VaR, ES, alpha)
+  }
+  return(list(Z2 = Z2_path, Z3 = Z3_path, Z4 = Z4_path, Exceedance = Exceedance_path))
+}
+
+#H1
+sim1 <- function(T, burnin, df, N, alpha, alpha1, beta1, omega0, omega1) {
+  Z2_path <- matrix(0,N,1); Z3_path <- matrix(0,N,1); Z4_path <- matrix(0,N,1); Exceedance_path <- matrix(0,N,1)
+  set.seed(4652374)
+  for (i in 1:N) {
+    path_sim1 <- garch_path(T, burnin, omega1, alpha1, beta1, df)
+    X <- path_sim1$X
+    Xt <- path_sim1$Xt
+    path_values <- garch_path_h1(T, burnin, omega0, alpha1, beta1, X)
+    sigma <- as.numeric(sqrt(path_values$sigma2))
+    
+    VaR <- -sigma*qstd(alpha, 0, 1, df)
+    VaR1 <- -sigma*qstd(0.01, 0, 1, df)
+    ES <- -sigma*(integrate(function(q) qstd(q, 0, 1, df), 0, alpha)$value/alpha)
+    
+    Exceedance_path[i] <- Exceedance(Xt, VaR1)
+    Z2_path[i] <- Z2(Xt, VaR, ES, alpha)
+    Z3_path[i] <- Z3(Xt, sigma, alpha, df)
+    Z4_path[i] <- Z4(Xt, VaR, ES, alpha)
+  }
+  return(list(Z2 = Z2_path, Z3 = Z3_path, Z4 = Z4_path, Exceedance = Exceedance_path))
+}
+
+# omega værdier 
+omega_values <- c(0.0005, 0.0025, 0.005, 0.025, 0.0075, 0.01, 0.0125, 0.015, 0.0175, 0.02, 0.0225, 0.025, 0.0275, 0.03)
+power_data <- matrix(0,length(omega_values),4)
+
+Number <- seq(1,length(omega_values), by = 1)
+  
+simH0 <- sim0(T = 250, burnin = 1000, df=100, N=10^4, alpha=0.025, alpha1=0.15, beta1=0.8, omega = 0.01)
+
+f <- function(p) {
+  quantile(simH0$Exceedance, probs = p, type = 1)
+}
+
+p_value <- seq(0.038, 0.05, length.out = 10000)
+f_values <- sapply(p_value, f)
+valid_p <- p_value[f_values == -6]
+p <- round(max(valid_p), 4)
+p
+
+for(omega in Number){
+  simH1 <- sim1(T = 250, burnin = 1000, df = 100, N=10^4, alpha=0.025, alpha1=0.15, beta1=0.8, omega0 = 0.01, omega1 = omega_values[omega])
+  
+  power_data[omega,] <- c(ecdf(simH1$Z2)(quantile(simH0$Z2, probs = 0.0401, type = 1)),
+                       ecdf(simH1$Z3)(quantile(simH0$Z3, probs = 0.0401, type = 1)),
+                       ecdf(simH1$Z4)(quantile(simH0$Z4, probs = 0.0401, type = 1)),
+                       ecdf(simH1$Exceedance)(quantile(simH0$Exceedance, probs = 0.0401, type = 1)))
+}
+
+plot_data2 <- data.frame(
+  omega = as.factor(rep(omega_values, times = 4)),
+  power = c(power_data[,1], power_data[,2], power_data[,3], power_data[,4]),
+  test = rep(c("Z2", "Z3", "Z4", "VaR1"), each = length(omega_values)),
+  sigma2 = round(rep(omega_values / (1 - 0.1 - 0.85), times = 4), 3)
+)
+
+ggplot(plot_data2, aes(x = sigma2, y = power, color = test, shape = test, group = test)) +
+geom_vline(xintercept = 0.2, linetype = "solid", color = "darkgrey") +
+  geom_point(size = 3) +
+  geom_line() +
+  scale_shape_manual(values = c(16, 17, 15, 18)) +
+  scale_color_manual(values = c('darkgreen', 'blue', 'red', 'purple')) +
+  scale_y_continuous(limits = c(0, 0.75)) +
+  scale_x_continuous(breaks = unique(plot_data2$sigma2), labels = label_number(accuracy = 0.01)) +
+  labs(
+    x = "Ubetingede varians",
+    y = "Power",
+    title = "Ændre den ubetingede varians",
+    color = "Teststørrelse",
+    shape = "Teststørrelse"
+  ) + theme_minimal() + theme(panel.grid.major.x = element_blank(), panel.grid.minor.x = element_blank())
+
+```
+
+# Plot under H1 for ubetinget varians
+
+```{r}
+# Parametre
+T <- 250
+burnin <- 1000
+df  <- 100
+alpha <- 0.025
+alpha1 <- 0.15
+beta1 <- 0.8 
+omega0 <- 0.01
+omega1 <- 0.025
+
+# Simulér
+set.seed(4652374)
+path_sim1 <- garch_path(T, burnin, omega1, alpha1, beta1, df)
+X <- path_sim1$X
+Xt <- path_sim1$Xt
+sigmaH1 <- as.numeric(sqrt(path_sim1$sigma2))
+
+path_values <- garch_path_h1(T, burnin, omega0, alpha1, beta1, X)
+sigmaH0 <- as.numeric(sqrt(path_values$sigma2))
+    
+ESH1 <- sigmaH0*(integrate(function(q) qstd(q, 0, 1, df), 0, alpha)$value/alpha)
+ES_real <- sigmaH1*(integrate(function(q) qstd(q, 0, 1, df), 0, alpha)$value/alpha)
+
+VaRH1 <- sigmaH0*qstd(0.025, 0, 1, df)
+VaR_real <- sigmaH1*qstd(0.025, 0, 1, df)
+
+omega1_plot <- data.frame(
+  t        = 1:T,
+  returns  = Xt[1:T],
+  ESH1       = ESH1,
+  ES_real = ES_real
+)
+
+ggplot(omega1_plot, aes(x = t)) +
+  geom_line(aes(y = returns, color = "Afkast")) +
+  geom_line(aes(y = ESH1, color = "ES H1"), linetype = "dashed") +
+  geom_line(aes(y = ES_real, color = "Reelle ES"), linetype = "solid") +
+  scale_color_manual(
+    name = "Størrelser",
+    values = c("Afkast"  = "black","ES H1"   = "blue","Reelle ES"   = "lightblue")) +
+  labs(title = "", x = "Tid (t)", y = "Xt") + theme_minimal()  + theme(legend.position = "none")
+
+omega1_plot1 <- data.frame(
+  t        = 1:T,
+  returns  = Xt[1:T],
+  VaRH1       = VaRH1,
+  VaR_real = VaR_real
+)
+
+ggplot(omega1_plot1, aes(x = t)) +
+  geom_line(aes(y = returns, color = "Afkast")) +
+  geom_line(aes(y = VaRH1, color = "ES H1"), linetype = "dashed") +
+  geom_line(aes(y = VaR_real, color = "Reelle ES"), linetype = "solid") +
+  scale_color_manual(
+    name = "Størrelser",
+    values = c("Afkast"  = "black","ES H1"   = "blue","Reelle ES"   = "lightblue")) +
+  labs(title = "", x = "Tid (t)", y = "Xt") + theme_minimal()  + theme(legend.position = "none")
+```
+
+# ARCH parameter
+```{r}
+garch_path_h1 <- function(n.sim, n.start, omega, alpha1, beta1, Xt) {
+  N <- n.sim + n.start
+  sigma2t <- numeric(N)
+  beta1 <- beta1-alpha1
+  
+  # Initialværdi
+  sigma2t[1] <- omega + beta1*omega/(1-alpha1-beta1)
+  
+  for (t in 2:N) {
+    sigma2t[t] <- omega + alpha1*(Xt[t-1])^2 + beta1*sigma2t[t-1]
+  }
+  return(list(Xt = Xt[(n.start+1):N], sigma2 = sigma2t[(n.start+1):N]))
+}
+
+garch_path <- function(n.sim, n.start, omega, alpha1, beta1, df) {
+  N <- n.sim + n.start
+  Xt <- numeric(N)
+  sigma2t <- numeric(N)
+  Zt <- rstd(N, 0, 1, nu = df)
+  beta1 <- beta1-alpha1
+  
+  # Initialværdi
+  sigma2t[1] <- omega + beta1*omega/(1-alpha1-beta1)
+  Xt[1] <- sqrt(sigma2t[1])*Zt[1]
+  
+  for (t in 2:N) {
+    sigma2t[t] <- omega + alpha1*(Xt[t-1])^2 + beta1*sigma2t[t-1]
+    Xt[t] <- sqrt(sigma2t[t])*Zt[t]
+  }
+  return(list(X = Xt, Xt = Xt[(n.start+1):N], sigma2 = sigma2t[(n.start+1):N]))
+}
+    
+# H0  
+sim0 <- function(T, burnin, df, N, alpha, alpha0, beta1, omega) {
+  Z2_path <- matrix(0,N,1); Z3_path <- matrix(0,N,1); Z4_path <- matrix(0,N,1); Exceedance_path <- matrix(0,N,1)
+  set.seed(4652374)
+  for (i in 1:N) {
+    path_sim <- garch_path(T, burnin, omega, alpha0, beta1, df)
+    Xt <- as.numeric(path_sim$Xt)
+    sigma <- as.numeric(sqrt(path_sim$sigma2))
+    
+    VaR <- -sigma*qstd(alpha, 0, 1, df)
+    VaR1 <- -sigma*qstd(0.01, 0, 1, df)
+    ES <- -sigma*(integrate(function(x) qstd(x, 0, 1, df), 0, alpha)$value/alpha)
+    
+    Exceedance_path[i] <- Exceedance(Xt, VaR1)
+    Z2_path[i] <- Z2(Xt, VaR, ES, alpha)
+    Z3_path[i] <- Z3(Xt, sigma, alpha, df)
+    Z4_path[i] <- Z4(Xt, VaR, ES, alpha)
+  }
+  return(list(Z2 = Z2_path, Z3 = Z3_path, Z4 = Z4_path, Exceedance = Exceedance_path))
+}
+
+# H1
+sim1 <- function(T, burnin, df, N, alpha, alpha0, alpha1, beta1, omega) {
+  Z2_path <- matrix(0,N,1); Z3_path <- matrix(0,N,1); Z4_path <- matrix(0,N,1); Exceedance_path <- matrix(0,N,1)
+  set.seed(4652374)
+  for (i in 1:N) {
+    path_sim1 <- garch_path(T, burnin, omega, alpha1, beta1, df)
+    X <- path_sim1$X
+    Xt <- path_sim1$Xt
+    path_values <- garch_path_h1(T, burnin, omega, alpha0, beta1, X)
+    sigma <- as.numeric(sqrt(path_values$sigma2))
+    
+    VaR <- -sigma*qstd(alpha, 0, 1, df)
+    VaR1 <- -sigma*qstd(0.01, 0, 1, df)
+    ES <- -sigma*(integrate(function(x) qstd(x, 0, 1, df), 0, alpha)$value/alpha)
+    
+    Exceedance_path[i] <- Exceedance(Xt, VaR1)
+    Z2_path[i] <- Z2(Xt, VaR, ES, alpha)
+    Z3_path[i] <- Z3(Xt, sigma, alpha, df)
+    Z4_path[i] <- Z4(Xt, VaR, ES, alpha)
+  }
+  return(list(Z2 = Z2_path, Z3 = Z3_path, Z4 = Z4_path, Exceedance = Exceedance_path))
+}
+
+# alpha1 værdier 
+alpha1_values <- c(0.2, 0.17, 0.15,0.13,0.11,0.09,0.07,0.05, 0.03, 0.02, 0.01)
+power_data <- matrix(0,length(alpha1_values),4)
+
+Number <- seq(1,length(alpha1_values), by = 1)
+  
+simH0 <- sim0(T = 250, burnin = 1000, df=100, N=10^4, alpha=0.025, alpha0=0.15, beta1=0.95, omega = 0.01)
+
+f <- function(p) {
+  quantile(simH0$Exceedance, probs = p, type = 1)
+}
+
+p_value <- seq(0.038, 0.05, length.out = 10000)
+f_values <- sapply(p_value, f)
+valid_p <- p_value[f_values == -6]
+p <- round(max(valid_p), 4)
+p
+
+for(alpha1 in Number){
+  simH1 <- sim1(T = 250, burnin = 1000, df = 100, N=10^4, alpha=0.025, alpha0=0.15, alpha1=alpha1_values[alpha1], beta1=0.95, omega = 0.01)
+  
+  power_data[alpha1,] <- c(ecdf(simH1$Z2)(quantile(simH0$Z2, probs = 0.0401, type = 1)),
+                       ecdf(simH1$Z3)(quantile(simH0$Z3, probs = 0.0401, type = 1)),
+                       ecdf(simH1$Z4)(quantile(simH0$Z4, probs = 0.0401, type = 1)),
+                       ecdf(simH1$Exceedance)(quantile(simH0$Exceedance, probs = 0.0401, type = 1)))
+}
+
+plot_data3 <- data.frame(
+  alpha1 = as.factor(rep(alpha1_values, times = 4)),
+  power = c(power_data[,1], power_data[,2], power_data[,3], power_data[,4]),
+  test = rep(c("Z2", "Z3", "Z4", "VaR1"), each = length(alpha1_values))
+)
+
+ggplot(plot_data3, aes(x = alpha1, y = power, color = test, shape = test, group = test)) +
+geom_vline(xintercept = 3, linetype = "solid", color = "darkgrey") +
+  geom_point(size = 3) +
+  geom_line() +
+  scale_shape_manual(values = c(16, 17, 15, 18)) +
+  scale_color_manual(values = c( 'darkgreen', 'blue', 'red', 'purple')) +
+  scale_y_continuous(limits = c(0, 0.75))  + 
+  scale_x_discrete(limits = rev(levels(plot_data3$alpha1))) +
+  labs(
+    x = "ARCH parameter",
+    y = "Power",
+    title = "Ændre ARCH parameteren",
+    color = "Teststørrelse",
+    shape = "Teststørrelse"
+  ) + theme_minimal() + theme(panel.grid.major.x = element_blank(), panel.grid.minor.x = element_blank())
+
+```
+
+# Plot under H1 for ARCH parameter
+
+```{r}
+# Parametre
+T <- 250
+burnin <- 1000
+df  <- 100
+alpha <- 0.025
+alpha1 <- 0.04 
+alpha0 <- 0.15 
+beta1 <- 0.95 
+omega <- 0.01
+
+# Simulér
+set.seed(4652374)
+path_sim1 <- garch_path(T, burnin, omega, alpha1, beta1, df)
+X <- path_sim1$X
+Xt <- path_sim1$Xt
+sigmaH1 <- as.numeric(sqrt(path_sim1$sigma2))
+
+path_values <- garch_path_h1(T, burnin, omega, alpha0, beta1, X)
+sigmaH0 <- as.numeric(sqrt(path_values$sigma2))
+    
+ESH1 <- sigmaH0*(integrate(function(q) qstd(q, 0, 1, df), 0, alpha)$value/alpha)
+
+ES_real <- sigmaH1*(integrate(function(q) qstd(q, 0, 1, df), 0, alpha)$value/alpha)
+
+VaRH1 <- sigmaH0*qstd(0.025, 0, 1, df)
+VaR_real <- sigmaH1*qstd(0.025, 0, 1, df)
+
+alpha1_plot <- data.frame(
+  t        = 1:T,
+  returns  = Xt[1:T], 
+  ESH1       = ESH1,
+  ES_real = ES_real
+)
+
+
+ggplot(alpha1_plot, aes(x = t)) +
+  geom_line(aes(y = returns, color = "Afkast")) +
+  geom_line(aes(y = ESH1, color = "ES H1"), linetype = "dashed") +
+  geom_line(aes(y = ES_real, color = "Reelle ES"), linetype = "solid") +
+  scale_color_manual( name = "Størrelser",values = c("Afkast"  = "black", "ES H1"   = "blue", "Reelle ES"   = "lightblue")) +labs( title = "", x = "Tid (t)", y = "Xt") + theme_minimal()  + theme(legend.position = "none")
+
+alpha1_plot1 <- data.frame(
+  t        = 1:T,
+  returns  = Xt[1:T], 
+  VaRH1       = VaRH1,
+  VaR_real = VaR_real
+)
+
+
+ggplot(alpha1_plot1, aes(x = t)) +
+  geom_line(aes(y = returns, color = "Afkast")) +
+  geom_line(aes(y = VaRH1, color = "ES H1"), linetype = "dashed") +
+  geom_line(aes(y = VaR_real, color = "Reelle ES"), linetype = "solid") +
+  scale_color_manual( name = "Størrelser",values = c("Afkast"  = "black", "ES H1"   = "blue", "Reelle ES"   = "lightblue")) +labs( title = "", x = "Tid (t)", y = "Xt") + theme_minimal()  + theme(legend.position = "none")
+
+```
+
+# Persistensen
+
+```{r}
+garch_path_h1 <- function(n.sim, n.start, omega, alpha1, beta1, Xt, d) {
+  N <- n.sim + n.start
+  sigma2t <- numeric(N)
+  
+  # Initialværdi
+  sigma2t[1] <- omega + beta1*omega/(1-alpha1-beta1)
+  alpha1 <- d*alpha1
+  beta1 <- d*beta1
+  omega <- sigma2t[1]*(1-alpha1-beta1)
+  
+  for (t in 2:N) {
+    sigma2t[t] <- omega + alpha1*(Xt[t-1])^2 + beta1*sigma2t[t-1]
+  }
+  return(list(Xt = Xt[(n.start+1):N], sigma2 = sigma2t[(n.start+1):N]))
+}
+
+garch_path <- function(n.sim, n.start, omega, alpha1, beta1, df, d) {
+  N <- n.sim + n.start
+  Xt <- numeric(N)
+  sigma2t <- numeric(N)
+  Zt <- rstd(N, 0, 1, nu = df)
+  
+  # Initialværdi
+  sigma2t[1] <- omega + beta1*omega/(1-alpha1-beta1)
+  alpha1 <- d*alpha1
+  beta1 <- d*beta1
+  omega <- sigma2t[1]*(1-alpha1-beta1)
+  Xt[1] <- sqrt(sigma2t[1])*Zt[1]
+  
+  for (t in 2:N) {
+    sigma2t[t] <- omega + alpha1*(Xt[t-1])^2 + beta1*sigma2t[t-1]
+    Xt[t] <- sqrt(sigma2t[t])*Zt[t]
+  }
+  return(list(X = Xt, Xt = Xt[(n.start+1):N], sigma2 = sigma2t[(n.start+1):N]))
+}
+
+# H0  
+sim0 <- function(T, burnin, df, N, alpha, alpha1, beta1, d0, omega) {
+  Z2_path <- matrix(0,N,1); Z3_path <- matrix(0,N,1); Z4_path <- matrix(0,N,1); Exceedance_path <- matrix(0,N,1)
+  set.seed(4652374)
+  for (i in 1:N) {
+    path_sim <- garch_path(T, burnin, omega, alpha1, beta1, df, d0)
+    Xt <- as.numeric(path_sim$Xt)
+    sigma <- as.numeric(sqrt(path_sim$sigma2))
+    
+    VaR1 <- -sigma*qstd(0.01, 0, 1, df)
+    VaR <- -sigma*qstd(alpha, 0, 1, df)
+    ES <- -sigma*(integrate(function(q) qstd(q, 0, 1, df), 0, alpha)$value/alpha)
+    
+    Exceedance_path[i] <- Exceedance(Xt, VaR1)
+    Z2_path[i] <- Z2(Xt, VaR, ES, alpha)
+    Z3_path[i] <- Z3(Xt, sigma, alpha, df)
+    Z4_path[i] <- Z4(Xt, VaR, ES, alpha)
+  }
+  return(list(Z2 = Z2_path, Z3 = Z3_path, Z4 = Z4_path, Exceedance = Exceedance_path))
+}
+#H1
+sim1 <- function(T, burnin, df, N, alpha, alpha1, beta1, d0, d1, omega) {
+  Z2_path <- matrix(0,N,1); Z3_path <- matrix(0,N,1); Z4_path <- matrix(0,N,1);Exceedance_path <- matrix(0,N,1)
+  set.seed(4652374)
+  for (i in 1:N) {
+    path_sim1 <- garch_path(T, burnin, omega, alpha1, beta1, df, d1)
+    X <- path_sim1$X
+    Xt <- path_sim1$Xt
+    path_values <- garch_path_h1(T, burnin, omega, alpha1, beta1, X, d0)
+    sigma <- as.numeric(sqrt(path_values$sigma2))
+    
+    VaR1 <- -sigma*qstd(0.01, 0, 1, df)
+    VaR <- -sigma*qstd(alpha, 0, 1, df)
+    ES <- -sigma*(integrate(function(q) qstd(q, 0, 1, df), 0, alpha)$value/alpha)
+    
+    Exceedance_path[i] <- Exceedance(Xt, VaR1)
+    Z2_path[i] <- Z2(Xt, VaR, ES, alpha)
+    Z3_path[i] <- Z3(Xt, sigma, alpha, df)
+    Z4_path[i] <- Z4(Xt, VaR, ES, alpha)
+  }
+  return(list(Z2 = Z2_path, Z3 = Z3_path, Z4 = Z4_path, Exceedance = Exceedance_path))
+}
+
+# d værdier 
+d_values <- c(0.9/0.95, 0.91/0.95, 0.92/0.95, 0.93/0.95, 0.94/0.95, 1, 0.96/0.95, 0.97/0.95,0.98/0.95, 0.99/0.95, 0.999/0.95)
+power_data <- matrix(0,length(d_values),4)
+
+Number <- seq(1,length(d_values), by = 1)
+
+simH0 <- sim0(T = 250, burnin = 1000, df=100, N=10^4, alpha=0.025, alpha1 = 0.15, beta1=0.8, d0 = 1, omega = 0.01)
+
+f <- function(p) {
+  quantile(simH0$Exceedance, probs = p, type = 1)
+}
+
+p_value <- seq(0.038, 0.05, length.out = 10000)
+f_values <- sapply(p_value, f)
+valid_p <- p_value[f_values == -6]
+p <- round(max(valid_p), 4)
+p
+
+for(d in Number){
+  simH1 <- sim1(T = 250, burnin = 1000, df = 100, N=10^4, alpha=0.025, alpha1=0.15, beta1=0.8, d0 = 1, d1 = d_values[d], omega = 0.01)
+  
+  power_data[d,] <- c(ecdf(simH1$Z2)(quantile(simH0$Z2, probs = 0.0401, type = 1)),
+                       ecdf(simH1$Z3)(quantile(simH0$Z3, probs = 0.0401, type = 1)),
+                       ecdf(simH1$Z4)(quantile(simH0$Z4, probs = 0.0401, type = 1)),
+                      ecdf(simH1$Exceedance)(quantile(simH0$Exceedance, probs = 0.0401, type = 1)))
+}
+
+plot_data4 <- data.frame(
+  d = factor(rep(round(d_values*0.95, 4), times = 4), levels = rev(round(d_values*0.95, 4))),
+  power = c(power_data[,1], power_data[,2], power_data[,3], power_data[,4]),
+  test = rep(c("Z2", "Z3", "Z4", "VaR1"), each = length(d_values))
+)
+
+ggplot(plot_data4, aes(x = d, y = power, color = test, shape = test, group = test)) +
+geom_vline(xintercept = 6, linetype = "solid", color = "darkgrey") +
+  geom_point(size = 3) +
+  geom_line() +
+  scale_shape_manual(values = c(16, 17, 15, 18)) +
+  scale_color_manual(values = c('darkgreen', 'blue', 'red', 'purple')) +
+  scale_y_continuous(limits = c(0, 0.75)) +
+  labs(
+    x = "Persistensen",
+    y = "Power",
+    title = "Ændre persistensen",
+    color = "Teststørrelse",
+    shape = "Teststørrelse"
+  ) + theme_minimal() + theme(panel.grid.major.x = element_blank(), panel.grid.minor.x = element_blank())
+
+```
+
+
+# Plot under H1 for persistensen
+
+```{r}
+# Parametre
+T <- 250
+burnin <- 1000
+df  <- 100
+alpha <- 0.025
+alpha1 <- 0.15 
+beta1 <- 0.8 
+omega <- 0.01
+d0 <- 1
+d1 <- 0.9/0.95
+
+# Simulér
+set.seed(465237)
+path_sim1 <- garch_path(T, burnin, omega, alpha1, beta1, df, d1)
+X <- path_sim1$X
+Xt <- path_sim1$Xt
+
+sigmaH1 <- as.numeric(sqrt(path_sim1$sigma2))
+
+path_values <- garch_path_h1(T, burnin, omega, alpha1, beta1, X, d0)
+
+sigmaH0 <- as.numeric(sqrt(path_values$sigma2))
+    
+ESH1 <- sigmaH0*(integrate(function(q) qstd(q, 0, 1, df), 0, alpha)$value/alpha)
+
+ES_real <- sigmaH1*(integrate(function(q) qstd(q, 0, 1, df), 0, alpha)$value/alpha)
+
+VaRH1 <- sigmaH0*qstd(0.025, 0, 1, df)
+VaR_real <- sigmaH1*qstd(0.025, 0, 1, df)
+
+persistens_plot <- data.frame(
+  t        = 1:T,
+  returns  = Xt[1:T],  
+  ESH1       = ESH1,
+  ES_real = ES_real
+)
+
+ggplot(persistens_plot, aes(x = t)) +
+  geom_line(aes(y = returns, color = "Afkast")) +
+  geom_line(aes(y = ESH1, color = "ES H1"), linetype = "dashed") +
+  geom_line(aes(y = ES_real, color = "Reelle ES"), linetype = "solid") +
+  scale_color_manual(name = NULL, values = c("Afkast"  = "black","ES H1"   = "blue","Reelle ES"   = "lightblue")) +labs(title = "",x = "Tid (t)",y = "Xt") + theme_minimal() + theme(legend.position = "none")
+
+persistens_plot1 <- data.frame(
+  t        = 1:T,
+  returns  = Xt[1:T],  
+  VaRH1       = VaRH1,
+  VaR_real = VaR_real
+)
+
+ggplot(persistens_plot1, aes(x = t)) +
+  geom_line(aes(y = returns, color = "Afkast")) +
+  geom_line(aes(y = VaRH1, color = "ES H1"), linetype = "dashed") +
+  geom_line(aes(y = VaR_real, color = "Reelle ES"), linetype = "solid") +
+  scale_color_manual(name = NULL, values = c("Afkast"  = "black","ES H1"   = "blue","Reelle ES"   = "lightblue")) +labs(title = "",x = "Tid (t)",y = "Xt") + theme_minimal() + theme(legend.position = "none")
+
+```
+
